@@ -1,0 +1,5 @@
+{
+  "name": "SchedulerAI Dashboard",
+  "description": "A real-time distributed system orchestrator powered by Gemini 2.5. It monitors job queues, detects deadlocks, and autonomously selects symmetry-breaking strategies.",
+  "requestFramePermissions": []
+}
