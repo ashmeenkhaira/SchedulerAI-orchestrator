@@ -19,3 +19,16 @@ export interface AgentDecision {
   params: any;
   message: string;
 }
+
+// Comparison data types
+export interface ComparisonDataPoint {
+  time: number;
+  withGemini: number;
+  withoutGemini: number;
+}
+
+export interface ComparisonMetrics {
+  queueLength: ComparisonDataPoint[];
+  completedTotal: ComparisonDataPoint[];
+  fairnessStd: ComparisonDataPoint[];
+}

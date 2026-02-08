@@ -54,3 +54,25 @@ export const connectWebSocket = (
 
   return ws;
 };
+
+export const runComparison = async (
+  base_strategy: string,
+  steps: number = 200,
+  arrival_prob: number = 0.4,
+  mean_service: number = 5.0,
+  seed: number = 42
+) => {
+  const response = await fetch(`${API_BASE_URL}/api/runs/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      base_strategy,
+      steps,
+      arrival_prob,
+      mean_service,
+      seed
+    })
+  });
+  if (!response.ok) throw new Error(`Failed to run comparison: ${response.statusText}`);
+  return await response.json();
+};

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { startSimulation, stopSimulation, connectWebSocket } from './services/simulator';
+import { startSimulation, stopSimulation, connectWebSocket, runComparison } from './services/simulator';
 import { askGemini } from './services/geminiService';
 import { MetricsCharts } from './components/MetricsCharts';
 import { ServerGrid } from './components/ServerGrid';
 import { AgentLogs } from './components/AgentLogs';
-import { MetricsPayload, AgentDecision } from './types';
-import { Play, Square, Cpu, Activity } from 'lucide-react';
+import { ComparisonCharts } from './components/ComparisonCharts';
+import { MetricsPayload, AgentDecision, ComparisonMetrics } from './types';
+import { Play, Square, Cpu, Activity, GitCompare } from 'lucide-react';
 
 const App: React.FC = () => {
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
@@ -13,6 +14,11 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<{ decision: AgentDecision, timestamp: number }[]>([]);
   const [runId, setRunId] = useState<number | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  
+  // Comparison mode state
+  const [comparisonData, setComparisonData] = useState<ComparisonMetrics | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
   
   // Controls whether we should listen to the WebSocket
   const isRunningRef = useRef(false);
@@ -81,6 +87,20 @@ const App: React.FC = () => {
       } catch (e) {
         console.error("Stop failed:", e);
       }
+    }
+  };
+
+  const handleRunComparison = async (strategy: string) => {
+    setComparisonLoading(true);
+    setIsComparing(true);
+    try {
+      const result = await runComparison(strategy, 200);
+      setComparisonData(result.comparison);
+    } catch (e) {
+      console.error("Comparison failed:", e);
+      alert('Failed to run comparison');
+    } finally {
+      setComparisonLoading(false);
     }
   };
 
@@ -156,6 +176,43 @@ const App: React.FC = () => {
                ))}
              </div>
           </div>
+
+          {/* Comparison Mode Section */}
+          <div className="mt-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30">
+            <h3 className="text-white font-medium mb-2 flex items-center gap-2">
+              <GitCompare className="w-4 h-4 text-indigo-400" /> Compare: With vs Without Gemini AI
+            </h3>
+            <p className="text-slate-400 text-sm mb-4">
+              Run identical simulations comparing fixed strategy (no AI) vs dynamic AI-guided strategy switching.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {strategies.map(s => (
+                <button
+                  key={`compare-${s}`}
+                  onClick={() => handleRunComparison(s)}
+                  disabled={comparisonLoading}
+                  className={`px-4 py-2 text-sm font-medium rounded transition-colors border ${
+                    comparisonLoading 
+                      ? 'bg-slate-700 text-slate-500 cursor-wait border-slate-600' 
+                      : 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border-indigo-500/50'
+                  }`}
+                >
+                  {comparisonLoading ? 'Running...' : `Compare vs ${s}`}
+                </button>
+              ))}
+            </div>
+            {isComparing && (
+              <button
+                onClick={() => { setIsComparing(false); setComparisonData(null); }}
+                className="mt-4 px-3 py-1 text-xs text-slate-400 hover:text-white border border-slate-600 rounded"
+              >
+                Clear Comparison
+              </button>
+            )}
+          </div>
+
+          {/* Comparison Charts */}
+          <ComparisonCharts comparisonData={comparisonData} isComparing={isComparing} />
         </div>
       </div>
 
