@@ -1,256 +1,258 @@
-🧠 SchedulerAI — Autonomous Distributed System Orchestrator
-<p align="center"> <em>"Static logic cannot survive dynamic chaos."</em> </p> <p align="center"> <img src="https://img.shields.io/badge/LLM-Powered-blue?style=for-the-badge" /> <img src="https://img.shields.io/badge/FastAPI-Backend-green?style=for-the-badge" /> <img src="https://img.shields.io/badge/React-Frontend-skyblue?style=for-the-badge" /> <img src="https://img.shields.io/badge/Distributed%20Systems-Simulator-purple?style=for-the-badge" /> </p> <p align="center"> SchedulerAI is a **self-driving infrastructure simulator** that uses Generative AI (Google Gemini) to dynamically detect deadlocks, resolve contention, and hot-swap scheduling strategies in real time. <br/> Think of it as **Kubernetes + OS scheduling algorithms + an autonomous SRE agent**, all inside one interactive system. </p>
-📌 Table of Contents
+# 🧠 SchedulerAI — Autonomous Distributed System Orchestrator
 
-🔥 The Problem
+> *"Static logic cannot survive dynamic chaos."*
 
-💡 The Solution
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Gemini](https://img.shields.io/badge/Gemini_2.5-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-0db7ed?style=for-the-badge&logo=docker&logoColor=white)
 
-🏗 Architecture
+SchedulerAI is a **self-driving infrastructure simulator** that uses Generative AI (Google Gemini) to dynamically detect deadlocks, resolve contention, and hot-swap scheduling strategies in real time — with fully reproducible, DB-backed decision logging.
 
-🚀 Key Features
+Think of it as **Kubernetes + OS scheduling algorithms + an autonomous SRE agent**, all inside one interactive system.
 
-🎓 OS Concepts
+---
 
-🛠 Tech Stack
+## 📌 Table of Contents
 
-⚙️ Installation
+- [The Problem](#-the-problem-thundering-herds)
+- [The Solution](#-the-solution-self-driving-infrastructure)
+- [Architecture](#-system-architecture)
+- [Key Features](#-key-features)
+- [Dashboard](#-dashboard)
+- [OS Concepts](#-operating-system-concepts-implemented)
+- [Tech Stack](#-tech-stack)
+- [Installation](#-installation--setup)
+- [How to Run](#-how-to-run)
 
-🎮 How to Run
+---
 
-💥 The Problem: Thundering Herds
+## 💥 The Problem: Thundering Herds
 
 Modern distributed systems (Netflix, AWS, Databases, Edge Networks) frequently collapse not from hardware failures but from:
 
-Resource Contention
-
-Live-locks / Deadlocks
-
-Hot Spots
-
-Queue Overload
-
-Race Conditions
+- Resource Contention
+- Live-locks / Deadlocks
+- Hot Spots
+- Queue Overload
+- Race Conditions
 
 Static scheduling algorithms fail exactly when traffic becomes unpredictable.
 
-Algorithm	Failure Mode
-Round Robin	Creates hot spots — one server overloaded while others idle
-Token Ring	Fair but extremely slow under high load
-Random Backoff	Reduces collisions but drastically increases latency
-Consistent Hashing	Good for sharding but terrible for bursty traffic
+| Algorithm | Failure Mode |
+|---|---|
+| Round Robin | Creates hot spots — one server overloaded while others idle |
+| Token Ring | Fair but extremely slow under high load |
+| Random Backoff | Reduces collisions but drastically increases latency |
+| Consistent Hashing | Good for sharding but terrible for bursty traffic |
 
-⚠️ By the time humans detect a bottleneck, the system has already collapsed.
+> ⚠️ By the time humans detect a bottleneck, the system has already collapsed.
 
-💡 The Solution: Self-Driving Infrastructure
+---
 
-SchedulerAI uses a continuous OODA Loop driven by an LLM:
+## 💡 The Solution: Self-Driving Infrastructure
 
-🔍 Observe
+SchedulerAI uses a continuous **OODA Loop** driven by an LLM:
 
-A discrete-event simulation engine (“Kernel”) emits live telemetry every 500ms.
+**🔍 Observe**
+A discrete-event simulation engine ("Kernel") emits live telemetry every 500ms.
 
-🧭 Orient
+**🧭 Orient**
+A React dashboard visualizes server load, queue depth, throughput, and contention in real time.
 
-A React dashboard visualizes server load, queue depth, throughput, and contention.
+**🤖 Decide**
+A Gemini-powered agent analyzes patterns to detect deadlocks, starvation, excessive queueing, and load imbalance.
 
-🤖 Decide
-
-A Gemini-powered agent analyzes patterns to detect:
-
-Deadlocks
-
-Starvation
-
-Excessive queueing
-
-Load imbalance
-
-⚡ Act
-
+**⚡ Act**
 Based on semantic reasoning, the AI switches the scheduling algorithm on the fly.
+No restarts. No downtime. Fully autonomous.
 
-No restarts.
-No downtime.
-Fully autonomous.
+---
 
-🏗 System Architecture
+## 🏗 System Architecture
+
+```mermaid
 graph TD
-    subgraph "Frontend (React + Vite)"
-        UI[Dashboard UI]
-        Agent[AI Service]
-        Chart[Live Charts]
-    end
+  subgraph Frontend ["Frontend (React + Vite)"]
+    UI[Dashboard UI]
+    Agent[AI Service]
+    Chart[Live Charts]
+  end
 
-    subgraph "Backend (FastAPI + Python)"
-        API[REST API]
-        WS[WebSocket Server]
-        Sim[Simulation Engine (Kernel)]
-    end
+  subgraph Backend ["Backend (FastAPI + Python)"]
+    API[REST API]
+    WS[WebSocket Server]
+    Sim[Simulation Engine - Kernel]
+    DB[(Decision Log DB)]
+  end
 
-    subgraph "External"
-        Gemini[Google Gemini API]
-    end
+  subgraph External
+    Gemini[Google Gemini API]
+  end
 
-    UI -->|Start/Stop| API
-    API -->|Control| Sim
-    Sim -->|Telemetry Stream (500ms)| WS
-    WS -->|Live Updates| Chart
-    Chart -->|Metrics| Agent
-    Agent -->|Prompt| Gemini
-    Gemini -->|Strategy Decision| Agent
+  UI -->|Start/Stop/Config| API
+  API -->|Control| Sim
+  Sim -->|Telemetry Stream 500ms| WS
+  WS -->|Live Updates| Chart
+  Chart -->|Metrics| Agent
+  Agent -->|Structured Prompt| Gemini
+  Gemini -->|Strategy Decision| Agent
+  Agent -->|Log Decision + State| DB
+  DB -->|Replay / Audit| API
+```
 
+**Design Philosophy:** OS Kernel + Distributed System Simulator + AI SRE — loosely coupled via REST + WebSockets, with a reproducible decision audit trail.
 
-Design Philosophy: OS Kernel + Distributed System Simulator + AI SRE
-All loosely coupled using REST + WebSockets.
+---
 
-🚀 Key Features
-🧩 1. Multi-Strategy Kernel
+## 🚀 Key Features
+
+### 🧩 1. Multi-Strategy Kernel
 
 Simulates 5 real OS & distributed scheduling algorithms:
 
-FCFS (Baseline) – Fast but unfair
+| Strategy | Based On |
+|---|---|
+| FCFS | Classic OS baseline — fast but unfair |
+| Random Backoff | CSMA/CD — Ethernet-style collision handling |
+| Consistent Hashing | Used in Cassandra, DynamoDB |
+| Token Ring | Ensures strict mutual exclusion |
+| Leader Election | Kubernetes-style orchestrator simulation |
 
-Random Backoff (CSMA/CD) – Ethernet-style collision handling
+### 🤖 2. Autonomous AI SRE (Rebuilt — Genuine LLM Reasoning)
 
-Consistent Hashing – Used in Cassandra, DynamoDB
+Google Gemini 2.5 is integrated as a real-time reasoning engine with **structured outputs and forced reasoning** — not rule-based fallbacks.
 
-Token Ring – Ensures strict mutual exclusion
+- Consumes live JSON metrics from the simulation kernel
+- Uses structured output prompts that force genuine strategy justification
+- Issues valid, validated control commands per time step
+- Detects deadlocks before they cascade
 
-Leader Election – Kubernetes-style orchestrator simulation
+### 🔍 3. Reproducible Decision Logging
 
-🤖 2. Autonomous AI SRE
+Every AI strategy decision is logged to a database with full context:
 
-Google Gemini 2.5 is integrated as a real-time reasoning engine.
+- Complete system state snapshot at decision time
+- Full Gemini prompt and raw response
+- Isolated RNG seed for exact run replay
+- Config versioning for fair A/B strategy comparison
 
-Consumes JSON metrics
+> This means every benchmark result is traceable, replayable, and defensible — not derived from hardcoded fallbacks.
 
-Uses Structured Outputs
+### 📊 4. Real-Time Dashboard
 
-Issues valid control commands
+Built with Recharts + WebSockets, delivering live updates.
 
-Detects deadlocks before they happen
+| Panel | What It Shows |
+|---|---|
+| Run ID & Time Steps | Current simulation session identifier |
+| Job Queue | Incoming jobs waiting for assignment |
+| Jobs Done | Completed job throughput over time |
+| Server Nodes | Per-node processing state and load |
+| Comparison Panel | Side-by-side strategy performance metrics |
+| Agent Decision Sidebar | Live LLM reasoning log per decision |
 
-📊 3. Real-Time Dashboard
-
-Built with Recharts + WebSockets, delivering live updates at 60fps.
-
-Features:
-
-Server Grid (Processing State)
-
-Queue Depth Chart
-
-Throughput Timeline
-
-AI Decisions Log
-
-🔐 4. Deadlock Detection Engine
+### 🔐 5. Deadlock Detection Engine
 
 Built-in heuristics monitor:
+- Queue stagnation across time steps
+- Circular wait patterns
+- Token starvation
+- Low throughput-to-arrival ratio
 
-Queue stagnation
+When detected → AI picks a recovery strategy autonomously.
 
-Circular wait patterns
+---
 
-Token starvation
+## 🎓 Operating System Concepts Implemented
 
-Low throughput-to-arrival ratio
+| OS Concept | Implemented As |
+|---|---|
+| Process Scheduling | Job Queue + 5 Kernel strategies |
+| Concurrency | Python asyncio throughout |
+| Deadlock Detection | Queue vs Throughput heuristics |
+| Race Conditions | Random Backoff collision simulation |
+| Mutual Exclusion | Token Ring implementation |
+| IPC | WebSockets between backend ↔ frontend |
+| Audit Trail | DB-backed decision log with seed replay |
 
-When detected → AI picks a new strategy.
+> This project is essentially a teaching OS kernel, visualized in real time.
 
-🎓 Operating System Concepts Implemented
-OS Concept	Implemented As
-Process Scheduling	Job Queue + Kernel strategies
-Concurrency	Python asyncio
-Deadlocks	Queue vs Throughput heuristics
-Race Conditions	Random Backoff collisions
-Mutual Exclusion	Token Ring
-IPC	WebSockets between backend ↔ frontend
+---
 
-This project is essentially a teaching OS kernel, visualized in real time.
+## 🛠 Tech Stack
 
-🛠 Tech Stack
-🎨 Frontend
+| Layer | Tech |
+|---|---|
+| Frontend | React 19, TypeScript, Tailwind CSS, Recharts, Vite |
+| Backend | FastAPI, Python 3.11, AsyncIO, SQLModel, Uvicorn |
+| AI | Google Gemini 2.5 API (Structured Outputs) |
+| Database | SQLite via SQLModel (decision log) |
+| DevOps | Docker, Git |
 
-React 19
+---
 
-TypeScript
+## ⚙️ Installation & Setup
 
-Tailwind CSS
+**Prerequisites**
+- Node.js 18+
+- Python 3.10+
+- Gemini API Key
 
-Recharts
+**1️⃣ Backend Setup**
 
-Vite
-
-⚙️ Backend
-
-FastAPI
-
-Python 3.11
-
-AsyncIO
-
-SQLModel
-
-Uvicorn
-
-🤖 AI & DevOps
-
-Google Gemini API
-
-Docker
-
-Git
-
-⚙️ Installation & Setup
-Prerequisites
-
-Node.js (18+)
-
-Python 3.10+
-
-Gemini API Key
-
-1️⃣ Backend Setup (Kernel)
+```bash
 cd backend
 python -m venv venv
-# Windows:
+
+# Windows
 .\venv\Scripts\activate
-# Mac/Linux:
+# Mac/Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
-
 uvicorn app.main:app --reload --port 8000
+```
 
-2️⃣ Frontend Setup (Dashboard)
+**2️⃣ Frontend Setup**
+
+```bash
 npm install
+```
 
-
-Create ./.env.local:
-
+Create `.env.local`:
+```
 GEMINI_API_KEY=your_key_here
+```
 
-
-Run the app:
-
+```bash
 npm run dev
+```
 
-🎮 How to Run
+---
 
-1️⃣ Start Backend on port 8000
-2️⃣ Start Frontend on port 3000
-3️⃣ Open: http://localhost:3000
+## 🎮 How to Run
 
-✔ Click "Start Simulation → Baseline"
+1. Start backend on port `8000`
+2. Start frontend on port `3000`
+3. Open `http://localhost:3000`
+4. Click **"Start Simulation → Baseline"**
 
-Then watch:
+Watch:
+- 📈 Queue length rise and fall across time steps
+- ⚙️ Server nodes handling and completing jobs
+- 🤖 AI agent reasoning log updating in the sidebar
+- 🔁 Algorithm hot-swaps triggered by deadlock detection
+- 📋 Every decision logged with full state for replay
 
-📈 Queue length rise & fall
+---
 
-⚙️ Servers handling jobs
+## 👩‍💻 Author
 
-🤖 AI agent reasoning logs
+**Ashmeen Khaira**
+SDE Intern Aspirant | Java • Backend • ML Research | B.E. @ Thapar '27
 
-🔁 Algorithm hot-swaps in real time
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://linkedin.com/in/ashmeen)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/ashmeenkhaira)
