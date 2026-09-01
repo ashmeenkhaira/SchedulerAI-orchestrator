@@ -12,12 +12,11 @@ services:
         sync: false # set manually in the Render dashboard — never commit this
       - key: CORS_ORIGINS
         value: https://schedulerai-frontend.onrender.com # update if you rename the frontend service
-      - key: DATABASE_URL
-        value: sqlite+aiosqlite:////app/data/simulation.db
-    disk:
-      name: schedulerai-data
-      mountPath: /app/data
-      sizeGB: 1
+    # No persistent disk on the free plan — DATABASE_URL falls back to the
+    # Dockerfile's default (sqlite+aiosqlite:///simulation.db), which lives
+    # on the container's ephemeral filesystem and resets on every redeploy
+    # or free-tier spin-down. Upgrade to a paid plan and add a `disk:` block
+    # (or switch to a Postgres add-on) if you need data to persist.
 
   # --- Frontend: static Vite build ---
   - type: web
