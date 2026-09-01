@@ -1,6 +1,9 @@
 import asyncio
+import logging
 import re
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger("uvicorn.error")
 
 from google import genai
 from google.genai import types
@@ -185,12 +188,14 @@ async def get_agent_decision(metrics: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return await _call_gemini_once(metrics)
     except Exception as first_error:
+        logger.exception("Gemini call failed (attempt 1)")
         delay = _parse_retry_delay(first_error)
         if delay > 0:
             await asyncio.sleep(delay)
             try:
                 return await _call_gemini_once(metrics)
             except Exception:
+                logger.exception("Gemini call failed (attempt 2, after retryDelay)")
                 return {
                     "action": "explain",
                     "strategy": None,
