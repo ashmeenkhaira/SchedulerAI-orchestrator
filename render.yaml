@@ -11,7 +11,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false # set manually in the Render dashboard — never commit this
       - key: CORS_ORIGINS
-        value: https://schedulerai-frontend.onrender.com # update if you rename the frontend service
+        value: https://schedulerai-frontend-qdi1.onrender.com
     # No persistent disk on the free plan — DATABASE_URL falls back to the
     # Dockerfile's default (sqlite+aiosqlite:///simulation.db), which lives
     # on the container's ephemeral filesystem and resets on every redeploy
@@ -27,9 +27,9 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://schedulerai-backend.onrender.com # update if you rename the backend service
+        value: https://schedulerai-backend-qdi1.onrender.com
       - key: VITE_WEBSOCKET_URL
-        value: wss://schedulerai-backend.onrender.com/api/ws
+        value: wss://schedulerai-backend-qdi1.onrender.com/api/ws
     routes:
       - type: rewrite
         source: /*
