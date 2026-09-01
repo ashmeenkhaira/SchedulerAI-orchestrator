@@ -1,56 +1,60 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+// Target path in your project: src/services/geminiService.ts
+
 import { MetricsPayload, AgentDecision } from '../types';
-import { SYSTEM_PROMPT, GEMINI_MODEL } from '../constants';
+import { API_BASE_URL } from '../constants';
 
-// We use process.env because your vite.config.ts defines it
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-// FIXED SCHEMA: 'params' MUST have explicit properties to be valid
-const responseSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    action: { type: Type.STRING },
-    strategy: { type: Type.STRING, nullable: true },
-    params: { 
-      type: Type.OBJECT,
-      nullable: true,
-      properties: {
-        // defining these properties fixes the "should be non-empty" error
-        priority: { type: Type.STRING, nullable: true },
-        target_server: { type: Type.INTEGER, nullable: true },
-        reason: { type: Type.STRING, nullable: true }
-      } 
-    },
-    message: { type: Type.STRING },
-  },
-  required: ['action', 'message'],
-};
-
-export const askGemini = async (metrics: MetricsPayload): Promise<AgentDecision> => {
+export const askGemini = async (
+  metrics: MetricsPayload,
+  runId: number | null
+): Promise<AgentDecision> => {
+  // The Gemini call itself now happens server-side (see
+  // app/gemini_service.py) so the API key never reaches the browser.
+  // The backend also handles the rate-limit retry-once-then-degrade
+  // behavior that used to live here.
+  let decision: AgentDecision;
   try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: JSON.stringify(metrics),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-      },
+    const res = await fetch(`${API_BASE_URL}/api/agent/decide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...metrics, run_id: runId }),
     });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
-    
-    return JSON.parse(text) as AgentDecision;
+    if (!res.ok) throw new Error(`agent/decide failed: ${res.status} ${res.statusText}`);
+    decision = await res.json();
   } catch (error) {
     console.error("Gemini Agent Error:", error);
-    return {
-      action: "explain",
-      strategy: null,
-      params: {},
-      message: "Agent connection interrupted. Decision making offline."
-    };
+    return { action: "explain", strategy: null, params: {}, message: "Agent connection interrupted. Decision making offline." };
   }
+
+  // Only actuate if we have an active run and AI wants to switch
+  if (runId !== null && decision.action === "switch_strategy" && decision.strategy) {
+    // Wrapped in try/catch: previously an unhandled rejection here propagated
+    // up into App.tsx's queryAgent(), skipping setIsThinking(false) and
+    // permanently freezing the agent loop after a single network blip.
+    // A failure to actuate/log should degrade gracefully, not kill the loop.
+    try {
+      // 1. Actually switch the running engine's strategy
+      const switchRes = await fetch(`${API_BASE_URL}/api/runs/switch-strategy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: runId, strategy: decision.strategy })
+      });
+      if (!switchRes.ok) {
+        console.error(`switch-strategy failed: ${switchRes.status} ${switchRes.statusText}`);
+      }
+
+      // 2. Log the decision for replay in comparison mode
+      const logRes = await fetch(`${API_BASE_URL}/api/runs/log-decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: runId, step: metrics.time, strategy: decision.strategy })
+      });
+      if (!logRes.ok) {
+        console.error(`log-decision failed: ${logRes.status} ${logRes.statusText}`);
+      }
+    } catch (postError) {
+      console.error("Failed to actuate/log Gemini decision:", postError);
+    }
+  }
+
+  return decision;
 };

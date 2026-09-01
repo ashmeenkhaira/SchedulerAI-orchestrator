@@ -1,0 +1,37 @@
+services:
+  # --- Backend: FastAPI + WebSocket, Dockerized ---
+  - type: web
+    name: schedulerai-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # set manually in the Render dashboard — never commit this
+      - key: CORS_ORIGINS
+        value: https://schedulerai-frontend.onrender.com # update if you rename the frontend service
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:////app/data/simulation.db
+    disk:
+      name: schedulerai-data
+      mountPath: /app/data
+      sizeGB: 1
+
+  # --- Frontend: static Vite build ---
+  - type: web
+    name: schedulerai-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://schedulerai-backend.onrender.com # update if you rename the backend service
+      - key: VITE_WEBSOCKET_URL
+        value: wss://schedulerai-backend.onrender.com/api/ws
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,10 +1,15 @@
-// Target path in your project: src/constants.ts
+import asyncio
+import re
+from typing import Any, Dict, Optional
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
-export const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL ?? 'ws://localhost:8000/api/ws';
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+from google import genai
+from google.genai import types
 
-export const SYSTEM_PROMPT = `You are SchedulerAI, an intelligent orchestrator for a distributed job scheduler
+from app.config import settings
+
+GEMINI_MODEL = "gemini-2.5-flash"
+
+SYSTEM_PROMPT = """You are SchedulerAI, an intelligent orchestrator for a distributed job scheduler
 running across 8 servers. Every ~15 seconds you receive a snapshot of current system metrics and must
 decide whether to keep the current scheduling strategy or switch to a better one.
 
@@ -115,4 +120,86 @@ Use "explain" when you are keeping the current strategy — but still provide fu
 
 Do NOT use "start_run" or "stop_run" — those actions are not available to you.
 Do NOT default to baseline just because nothing is obviously wrong — reason about whether the current
-strategy is genuinely the best fit, not just whether an emergency threshold is crossed.`;
+strategy is genuinely the best fit, not just whether an emergency threshold is crossed."""
+
+_STRATEGY_ENUM = ["baseline", "random_backoff", "consistent_hash", "token_ring", "leader_election"]
+
+_RESPONSE_SCHEMA = types.Schema(
+    type=types.Type.OBJECT,
+    properties={
+        "action": types.Schema(type=types.Type.STRING, enum=["switch_strategy", "explain"]),
+        "strategy": types.Schema(type=types.Type.STRING, nullable=True, enum=_STRATEGY_ENUM),
+        "params": types.Schema(
+            type=types.Type.OBJECT,
+            nullable=True,
+            properties={
+                "priority": types.Schema(type=types.Type.STRING, nullable=True),
+                "target_server": types.Schema(type=types.Type.INTEGER, nullable=True),
+                "reason": types.Schema(type=types.Type.STRING, nullable=True),
+            },
+        ),
+        "message": types.Schema(type=types.Type.STRING),
+    },
+    required=["action", "message"],
+)
+
+_client: Optional[genai.Client] = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY is not configured on the server")
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _client
+
+
+def _parse_retry_delay(error: Exception) -> float:
+    match = re.search(r'"retryDelay"\s*:\s*"(\d+)s"', str(error))
+    return float(match.group(1)) if match else 0.0
+
+
+async def _call_gemini_once(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    client = _get_client()
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=GEMINI_MODEL,
+        contents=str(metrics),
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=_RESPONSE_SCHEMA,
+        ),
+    )
+    if not response.text:
+        raise RuntimeError("Empty response from Gemini")
+    import json
+    return json.loads(response.text)
+
+
+async def get_agent_decision(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """Mirrors the retry-once-then-degrade-gracefully behavior the frontend
+    used to implement client-side, now running server-side so the API key
+    never reaches the browser."""
+    try:
+        return await _call_gemini_once(metrics)
+    except Exception as first_error:
+        delay = _parse_retry_delay(first_error)
+        if delay > 0:
+            await asyncio.sleep(delay)
+            try:
+                return await _call_gemini_once(metrics)
+            except Exception:
+                return {
+                    "action": "explain",
+                    "strategy": None,
+                    "params": {},
+                    "message": "Agent rate-limited. Decision making paused.",
+                }
+        return {
+            "action": "explain",
+            "strategy": None,
+            "params": {},
+            "message": "Agent connection interrupted. Decision making offline.",
+        }
