@@ -2,7 +2,6 @@
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 export const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL ?? 'ws://localhost:8000/api/ws';
-export const GEMINI_MODEL = 'gemini-2.5-flash';
 
 export const SYSTEM_PROMPT = `You are SchedulerAI, an intelligent orchestrator for a distributed job scheduler
 running across 8 servers. Every ~15 seconds you receive a snapshot of current system metrics and must

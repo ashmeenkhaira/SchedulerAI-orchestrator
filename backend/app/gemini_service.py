@@ -10,7 +10,7 @@ from google.genai import types
 
 from app.config import settings
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = """You are SchedulerAI, an intelligent orchestrator for a distributed job scheduler
 running across 8 servers. Every ~15 seconds you receive a snapshot of current system metrics and must
