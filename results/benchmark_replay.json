@@ -1,0 +1,863 @@
+{
+  "mode": "replay",
+  "treatment_source": "real logged Gemini decisions",
+  "run_id": 43,
+  "config": {
+    "seed": 1,
+    "steps": 202,
+    "arrival_prob": 0.6,
+    "mean_service": 8.0,
+    "decisions_replayed": 14
+  },
+  "decision_log": [
+    {
+      "step": 1,
+      "strategy": "baseline"
+    },
+    {
+      "step": 21,
+      "strategy": "consistent_hash"
+    },
+    {
+      "step": 31,
+      "strategy": "token_ring"
+    },
+    {
+      "step": 51,
+      "strategy": "random_backoff"
+    },
+    {
+      "step": 63,
+      "strategy": "consistent_hash"
+    },
+    {
+      "step": 73,
+      "strategy": "token_ring"
+    },
+    {
+      "step": 93,
+      "strategy": "leader_election"
+    },
+    {
+      "step": 103,
+      "strategy": "leader_election"
+    },
+    {
+      "step": 113,
+      "strategy": "consistent_hash"
+    },
+    {
+      "step": 123,
+      "strategy": "leader_election"
+    },
+    {
+      "step": 143,
+      "strategy": "consistent_hash"
+    },
+    {
+      "step": 163,
+      "strategy": "leader_election"
+    },
+    {
+      "step": 173,
+      "strategy": "random_backoff"
+    },
+    {
+      "step": 185,
+      "strategy": "random_backoff"
+    }
+  ],
+  "results": {
+    "baseline": {
+      "base_strategy": "baseline",
+      "summary": {
+        "avg_queue_len": {
+          "control_mean": 4.842,
+          "treatment_mean": 6.312,
+          "pct_change": 30.4,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.47,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_wait": {
+          "control_mean": 7.866,
+          "treatment_mean": 10.293,
+          "pct_change": 30.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": 2.427,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_turnaround": {
+          "control_mean": 14.271,
+          "treatment_mean": 16.496,
+          "pct_change": 15.6,
+          "paired_delta": {
+            "n": 1,
+            "mean": 2.225,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "throughput": {
+          "control_mean": 0.5842,
+          "treatment_mean": 0.5594,
+          "pct_change": -4.2,
+          "paired_delta": {
+            "n": 1,
+            "mean": -0.0248,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "jobs_completed": {
+          "control_mean": 118.0,
+          "treatment_mean": 113.0,
+          "pct_change": -4.2,
+          "paired_delta": {
+            "n": 1,
+            "mean": -5.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "max_queue_len": {
+          "control_mean": 17.0,
+          "treatment_mean": 20.0,
+          "pct_change": 17.6,
+          "paired_delta": {
+            "n": 1,
+            "mean": 3.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_fairness_std": {
+          "control_mean": 3.037,
+          "treatment_mean": 2.435,
+          "pct_change": -19.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": -0.602,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "starvation_steps": {
+          "control_mean": 0.0,
+          "treatment_mean": 0.0,
+          "pct_change": null,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        }
+      },
+      "per_seed": [
+        {
+          "seed": 1,
+          "control": {
+            "avg_queue_len": 4.842,
+            "max_queue_len": 17,
+            "avg_wait": 7.866,
+            "avg_turnaround": 14.271,
+            "throughput": 0.5842,
+            "jobs_arrived": 128,
+            "jobs_completed": 118,
+            "final_queue_len": 4,
+            "final_fairness_std": 3.455,
+            "avg_fairness_std": 3.037,
+            "starvation_steps": 0
+          },
+          "treatment": {
+            "avg_queue_len": 6.312,
+            "max_queue_len": 20,
+            "avg_wait": 10.293,
+            "avg_turnaround": 16.496,
+            "throughput": 0.5594,
+            "jobs_arrived": 128,
+            "jobs_completed": 113,
+            "final_queue_len": 9,
+            "final_fairness_std": 3.059,
+            "avg_fairness_std": 2.435,
+            "starvation_steps": 0
+          },
+          "strategies_used": [
+            "baseline",
+            "consistent_hash",
+            "leader_election",
+            "random_backoff",
+            "token_ring"
+          ],
+          "steps_diverged": 182
+        }
+      ],
+      "crn_verified": true,
+      "crn_failed_seeds": []
+    },
+    "random_backoff": {
+      "base_strategy": "random_backoff",
+      "summary": {
+        "avg_queue_len": {
+          "control_mean": 5.47,
+          "treatment_mean": 6.312,
+          "pct_change": 15.4,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.842,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_wait": {
+          "control_mean": 8.897,
+          "treatment_mean": 10.293,
+          "pct_change": 15.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.396,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_turnaround": {
+          "control_mean": 15.175,
+          "treatment_mean": 16.496,
+          "pct_change": 8.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.321,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "throughput": {
+          "control_mean": 0.5644,
+          "treatment_mean": 0.5594,
+          "pct_change": -0.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": -0.005,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "jobs_completed": {
+          "control_mean": 114.0,
+          "treatment_mean": 113.0,
+          "pct_change": -0.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": -1.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "max_queue_len": {
+          "control_mean": 19.0,
+          "treatment_mean": 20.0,
+          "pct_change": 5.3,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_fairness_std": {
+          "control_mean": 1.908,
+          "treatment_mean": 2.435,
+          "pct_change": 27.6,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.527,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "starvation_steps": {
+          "control_mean": 0.0,
+          "treatment_mean": 0.0,
+          "pct_change": null,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        }
+      },
+      "per_seed": [
+        {
+          "seed": 1,
+          "control": {
+            "avg_queue_len": 5.47,
+            "max_queue_len": 19,
+            "avg_wait": 8.897,
+            "avg_turnaround": 15.175,
+            "throughput": 0.5644,
+            "jobs_arrived": 128,
+            "jobs_completed": 114,
+            "final_queue_len": 7,
+            "final_fairness_std": 2.634,
+            "avg_fairness_std": 1.908,
+            "starvation_steps": 0
+          },
+          "treatment": {
+            "avg_queue_len": 6.312,
+            "max_queue_len": 20,
+            "avg_wait": 10.293,
+            "avg_turnaround": 16.496,
+            "throughput": 0.5594,
+            "jobs_arrived": 128,
+            "jobs_completed": 113,
+            "final_queue_len": 9,
+            "final_fairness_std": 3.059,
+            "avg_fairness_std": 2.435,
+            "starvation_steps": 0
+          },
+          "strategies_used": [
+            "baseline",
+            "consistent_hash",
+            "leader_election",
+            "random_backoff",
+            "token_ring"
+          ],
+          "steps_diverged": 160
+        }
+      ],
+      "crn_verified": true,
+      "crn_failed_seeds": []
+    },
+    "consistent_hash": {
+      "base_strategy": "consistent_hash",
+      "summary": {
+        "avg_queue_len": {
+          "control_mean": 5.653,
+          "treatment_mean": 6.312,
+          "pct_change": 11.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.659,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_wait": {
+          "control_mean": 9.189,
+          "treatment_mean": 10.293,
+          "pct_change": 12.0,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.104,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_turnaround": {
+          "control_mean": 15.321,
+          "treatment_mean": 16.496,
+          "pct_change": 7.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.175,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "throughput": {
+          "control_mean": 0.5545,
+          "treatment_mean": 0.5594,
+          "pct_change": 0.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0049,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "jobs_completed": {
+          "control_mean": 112.0,
+          "treatment_mean": 113.0,
+          "pct_change": 0.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "max_queue_len": {
+          "control_mean": 21.0,
+          "treatment_mean": 20.0,
+          "pct_change": -4.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": -1.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "avg_fairness_std": {
+          "control_mean": 2.284,
+          "treatment_mean": 2.435,
+          "pct_change": 6.6,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.151,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "starvation_steps": {
+          "control_mean": 0.0,
+          "treatment_mean": 0.0,
+          "pct_change": null,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        }
+      },
+      "per_seed": [
+        {
+          "seed": 1,
+          "control": {
+            "avg_queue_len": 5.653,
+            "max_queue_len": 21,
+            "avg_wait": 9.189,
+            "avg_turnaround": 15.321,
+            "throughput": 0.5545,
+            "jobs_arrived": 128,
+            "jobs_completed": 112,
+            "final_queue_len": 10,
+            "final_fairness_std": 4.301,
+            "avg_fairness_std": 2.284,
+            "starvation_steps": 0
+          },
+          "treatment": {
+            "avg_queue_len": 6.312,
+            "max_queue_len": 20,
+            "avg_wait": 10.293,
+            "avg_turnaround": 16.496,
+            "throughput": 0.5594,
+            "jobs_arrived": 128,
+            "jobs_completed": 113,
+            "final_queue_len": 9,
+            "final_fairness_std": 3.059,
+            "avg_fairness_std": 2.435,
+            "starvation_steps": 0
+          },
+          "strategies_used": [
+            "baseline",
+            "consistent_hash",
+            "leader_election",
+            "random_backoff",
+            "token_ring"
+          ],
+          "steps_diverged": 152
+        }
+      ],
+      "crn_verified": true,
+      "crn_failed_seeds": []
+    },
+    "token_ring": {
+      "base_strategy": "token_ring",
+      "summary": {
+        "avg_queue_len": {
+          "control_mean": 18.604,
+          "treatment_mean": 6.312,
+          "pct_change": -66.1,
+          "paired_delta": {
+            "n": 1,
+            "mean": -12.292,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "avg_wait": {
+          "control_mean": 25.038,
+          "treatment_mean": 10.293,
+          "pct_change": -58.9,
+          "paired_delta": {
+            "n": 1,
+            "mean": -14.745,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "avg_turnaround": {
+          "control_mean": 29.055,
+          "treatment_mean": 16.496,
+          "pct_change": -43.2,
+          "paired_delta": {
+            "n": 1,
+            "mean": -12.559,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "throughput": {
+          "control_mean": 0.3614,
+          "treatment_mean": 0.5594,
+          "pct_change": 54.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.198,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "jobs_completed": {
+          "control_mean": 73.0,
+          "treatment_mean": 113.0,
+          "pct_change": 54.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": 40.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "max_queue_len": {
+          "control_mean": 53.0,
+          "treatment_mean": 20.0,
+          "pct_change": -62.3,
+          "paired_delta": {
+            "n": 1,
+            "mean": -33.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "avg_fairness_std": {
+          "control_mean": 1.135,
+          "treatment_mean": 2.435,
+          "pct_change": 114.5,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.3,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "starvation_steps": {
+          "control_mean": 0.0,
+          "treatment_mean": 0.0,
+          "pct_change": null,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        }
+      },
+      "per_seed": [
+        {
+          "seed": 1,
+          "control": {
+            "avg_queue_len": 18.604,
+            "max_queue_len": 53,
+            "avg_wait": 25.038,
+            "avg_turnaround": 29.055,
+            "throughput": 0.3614,
+            "jobs_arrived": 128,
+            "jobs_completed": 73,
+            "final_queue_len": 51,
+            "final_fairness_std": 1.9,
+            "avg_fairness_std": 1.135,
+            "starvation_steps": 0
+          },
+          "treatment": {
+            "avg_queue_len": 6.312,
+            "max_queue_len": 20,
+            "avg_wait": 10.293,
+            "avg_turnaround": 16.496,
+            "throughput": 0.5594,
+            "jobs_arrived": 128,
+            "jobs_completed": 113,
+            "final_queue_len": 9,
+            "final_fairness_std": 3.059,
+            "avg_fairness_std": 2.435,
+            "starvation_steps": 0
+          },
+          "strategies_used": [
+            "baseline",
+            "consistent_hash",
+            "leader_election",
+            "random_backoff",
+            "token_ring"
+          ],
+          "steps_diverged": 162
+        }
+      ],
+      "crn_verified": true,
+      "crn_failed_seeds": []
+    },
+    "leader_election": {
+      "base_strategy": "leader_election",
+      "summary": {
+        "avg_queue_len": {
+          "control_mean": 5.292,
+          "treatment_mean": 6.312,
+          "pct_change": 19.3,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.02,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_wait": {
+          "control_mean": 8.816,
+          "treatment_mean": 10.293,
+          "pct_change": 16.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.477,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_turnaround": {
+          "control_mean": 14.887,
+          "treatment_mean": 16.496,
+          "pct_change": 10.8,
+          "paired_delta": {
+            "n": 1,
+            "mean": 1.609,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "throughput": {
+          "control_mean": 0.5693,
+          "treatment_mean": 0.5594,
+          "pct_change": -1.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": -0.0099,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "jobs_completed": {
+          "control_mean": 115.0,
+          "treatment_mean": 113.0,
+          "pct_change": -1.7,
+          "paired_delta": {
+            "n": 1,
+            "mean": -2.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "max_queue_len": {
+          "control_mean": 20.0,
+          "treatment_mean": 20.0,
+          "pct_change": 0.0,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        },
+        "avg_fairness_std": {
+          "control_mean": 2.743,
+          "treatment_mean": 2.435,
+          "pct_change": -11.2,
+          "paired_delta": {
+            "n": 1,
+            "mean": -0.308,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 1,
+          "seeds_total": 1
+        },
+        "starvation_steps": {
+          "control_mean": 0.0,
+          "treatment_mean": 0.0,
+          "pct_change": null,
+          "paired_delta": {
+            "n": 1,
+            "mean": 0.0,
+            "std": null,
+            "ci95": null,
+            "seeds_improved": null
+          },
+          "seeds_treatment_better": 0,
+          "seeds_total": 1
+        }
+      },
+      "per_seed": [
+        {
+          "seed": 1,
+          "control": {
+            "avg_queue_len": 5.292,
+            "max_queue_len": 20,
+            "avg_wait": 8.816,
+            "avg_turnaround": 14.887,
+            "throughput": 0.5693,
+            "jobs_arrived": 128,
+            "jobs_completed": 115,
+            "final_queue_len": 7,
+            "final_fairness_std": 4.442,
+            "avg_fairness_std": 2.743,
+            "starvation_steps": 0
+          },
+          "treatment": {
+            "avg_queue_len": 6.312,
+            "max_queue_len": 20,
+            "avg_wait": 10.293,
+            "avg_turnaround": 16.496,
+            "throughput": 0.5594,
+            "jobs_arrived": 128,
+            "jobs_completed": 113,
+            "final_queue_len": 9,
+            "final_fairness_std": 3.059,
+            "avg_fairness_std": 2.435,
+            "starvation_steps": 0
+          },
+          "strategies_used": [
+            "baseline",
+            "consistent_hash",
+            "leader_election",
+            "random_backoff",
+            "token_ring"
+          ],
+          "steps_diverged": 152
+        }
+      ],
+      "crn_verified": true,
+      "crn_failed_seeds": []
+    }
+  },
+  "generated_at": "2026-09-22 12:01:26 UTC"
+}

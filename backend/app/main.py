@@ -21,7 +21,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    # No cookie or Authorization-based auth is used, and browsers reject
+    # allow_credentials=True paired with a "*" origin anyway — so the old
+    # combination was simultaneously broader than needed and non-functional.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

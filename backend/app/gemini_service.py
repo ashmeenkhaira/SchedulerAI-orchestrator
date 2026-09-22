@@ -1,16 +1,19 @@
 import asyncio
+import json
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from app.config import settings
+from app.scheduler_engine import STRATEGIES
 
 logger = logging.getLogger("uvicorn.error")
 
-from google import genai
-from google.genai import types
-
-from app.config import settings
-
 GEMINI_MODEL = "gemini-3.6-flash"
+
+# Hard ceiling on a single Gemini call. Without it a hung request left the
+# frontend's isThinking flag set forever, permanently freezing the agent loop.
+REQUEST_TIMEOUT_SECONDS = 30.0
 
 SYSTEM_PROMPT = """You are SchedulerAI, an intelligent orchestrator for a distributed job scheduler
 running across 8 servers. Every ~15 seconds you receive a snapshot of current system metrics and must
@@ -61,9 +64,12 @@ METRICS YOU RECEIVE:
 - time: current simulation step
 - queue_len: number of jobs waiting (not yet assigned to any server)
 - queue_rate: smoothed rate of queue change per step — POSITIVE means queue is growing, NEGATIVE means draining
-- num_failed: number of servers currently offline (failures are random, last 10–30 steps)
+- num_failed: number of servers currently offline (failures are random, last 10–30 steps).
+              A failed server cannot accept new work and makes no progress on the job it was holding;
+              that job is returned to the front of the queue.
 - fairness_std: standard deviation of completed-job counts across all 8 servers (0 = perfect fairness)
 - completed_total: total jobs finished so far across all servers
+- avg_wait: mean steps a job spent queued before a server picked it up
 - strategy: the strategy currently running
 - servers[]: per-server detail — busy, completed count, failed status
 
@@ -125,86 +131,116 @@ Do NOT use "start_run" or "stop_run" — those actions are not available to you.
 Do NOT default to baseline just because nothing is obviously wrong — reason about whether the current
 strategy is genuinely the best fit, not just whether an emergency threshold is crossed."""
 
-_STRATEGY_ENUM = ["baseline", "random_backoff", "consistent_hash", "token_ring", "leader_election"]
-
-_RESPONSE_SCHEMA = types.Schema(
-    type=types.Type.OBJECT,
-    properties={
-        "action": types.Schema(type=types.Type.STRING, enum=["switch_strategy", "explain"]),
-        "strategy": types.Schema(type=types.Type.STRING, nullable=True, enum=_STRATEGY_ENUM),
-        "params": types.Schema(
-            type=types.Type.OBJECT,
-            nullable=True,
-            properties={
-                "priority": types.Schema(type=types.Type.STRING, nullable=True),
-                "target_server": types.Schema(type=types.Type.INTEGER, nullable=True),
-                "reason": types.Schema(type=types.Type.STRING, nullable=True),
-            },
-        ),
-        "message": types.Schema(type=types.Type.STRING),
-    },
-    required=["action", "message"],
-)
-
-_client: Optional[genai.Client] = None
+_client = None
+_config = None
 
 
-def _get_client() -> genai.Client:
-    global _client
+def _load_sdk():
+    """Imported lazily so a missing google-genai install degrades this one
+    endpoint instead of preventing the whole backend from importing. The
+    comparison pipeline and the simulation engine do not need the SDK."""
+    from google import genai
+    from google.genai import types
+    return genai, types
+
+
+def _get_client_and_config():
+    global _client, _config
     if _client is None:
         if not settings.GEMINI_API_KEY:
             raise RuntimeError("GEMINI_API_KEY is not configured on the server")
+        genai, types = _load_sdk()
         _client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    return _client
+        _config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "action": types.Schema(type=types.Type.STRING, enum=["switch_strategy", "explain"]),
+                    "strategy": types.Schema(type=types.Type.STRING, nullable=True, enum=STRATEGIES),
+                    "params": types.Schema(
+                        type=types.Type.OBJECT,
+                        nullable=True,
+                        properties={
+                            "priority": types.Schema(type=types.Type.STRING, nullable=True),
+                            "target_server": types.Schema(type=types.Type.INTEGER, nullable=True),
+                            "reason": types.Schema(type=types.Type.STRING, nullable=True),
+                        },
+                    ),
+                    "message": types.Schema(type=types.Type.STRING),
+                },
+                required=["action", "message"],
+            ),
+        )
+    return _client, _config
 
 
 def _parse_retry_delay(error: Exception) -> float:
-    match = re.search(r'"retryDelay"\s*:\s*"(\d+)s"', str(error))
+    # Accepts fractional seconds too. The old pattern was (\d+)s, so a
+    # retryDelay of "1.5s" matched nothing and the call gave up without
+    # retrying at all.
+    match = re.search(r'"retryDelay"\s*:\s*"([0-9]*\.?[0-9]+)s"', str(error))
     return float(match.group(1)) if match else 0.0
 
 
+def _fallback(message: str) -> Dict[str, Any]:
+    """A degraded response: the model was never consulted.
+
+    `degraded` is what lets the caller tell "the agent looked and chose to
+    hold" apart from "the agent was never reachable". Both arrive as
+    action="explain", and without the flag the second kind was being written
+    into the decision log as though it were real model output.
+    """
+    return {
+        "action": "explain",
+        "strategy": None,
+        "params": {},
+        "message": message,
+        "degraded": True,
+    }
+
+
 async def _call_gemini_once(metrics: Dict[str, Any]) -> Dict[str, Any]:
-    client = _get_client()
-    response = await asyncio.to_thread(
-        client.models.generate_content,
-        model=GEMINI_MODEL,
-        contents=str(metrics),
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=_RESPONSE_SCHEMA,
+    client, config = _get_client_and_config()
+    response = await asyncio.wait_for(
+        asyncio.to_thread(
+            client.models.generate_content,
+            model=GEMINI_MODEL,
+            # Send real JSON rather than str(dict), which produced Python
+            # repr with single quotes and True/False/None literals.
+            contents=json.dumps(metrics),
+            config=config,
         ),
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response.text:
         raise RuntimeError("Empty response from Gemini")
-    import json
-    return json.loads(response.text)
+
+    decision = json.loads(response.text)
+    strategy = decision.get("strategy")
+    if decision.get("action") == "switch_strategy" and strategy not in STRATEGIES:
+        raise ValueError(f"Gemini returned an unknown strategy: {strategy!r}")
+    return decision
 
 
 async def get_agent_decision(metrics: Dict[str, Any]) -> Dict[str, Any]:
-    """Mirrors the retry-once-then-degrade-gracefully behavior the frontend
-    used to implement client-side, now running server-side so the API key
-    never reaches the browser."""
+    """One attempt, then one retry if the error carries a parseable retryDelay,
+    then degrade to an 'explain' response the UI can display."""
     try:
         return await _call_gemini_once(metrics)
+    except asyncio.TimeoutError:
+        logger.warning("Gemini call timed out after %ss", REQUEST_TIMEOUT_SECONDS)
+        return _fallback("Agent timed out. Decision making paused.")
     except Exception as first_error:
         logger.exception("Gemini call failed (attempt 1)")
         delay = _parse_retry_delay(first_error)
-        if delay > 0:
-            await asyncio.sleep(delay)
-            try:
-                return await _call_gemini_once(metrics)
-            except Exception:
-                logger.exception("Gemini call failed (attempt 2, after retryDelay)")
-                return {
-                    "action": "explain",
-                    "strategy": None,
-                    "params": {},
-                    "message": "Agent rate-limited. Decision making paused.",
-                }
-        return {
-            "action": "explain",
-            "strategy": None,
-            "params": {},
-            "message": "Agent connection interrupted. Decision making offline.",
-        }
+        if delay <= 0:
+            return _fallback("Agent connection interrupted. Decision making offline.")
+
+        await asyncio.sleep(delay)
+        try:
+            return await _call_gemini_once(metrics)
+        except Exception:
+            logger.exception("Gemini call failed (attempt 2, after retryDelay)")
+            return _fallback("Agent rate-limited. Decision making paused.")

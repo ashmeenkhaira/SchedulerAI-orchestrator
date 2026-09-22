@@ -3,7 +3,7 @@ import { AgentDecision } from '../types';
 import { Bot, Terminal } from 'lucide-react';
 
 interface AgentLogsProps {
-  logs: { decision: AgentDecision, timestamp: number }[];
+  logs: { decision: AgentDecision; timestamp: number }[];
 }
 
 export const AgentLogs: React.FC<AgentLogsProps> = ({ logs }) => {
@@ -27,24 +27,28 @@ export const AgentLogs: React.FC<AgentLogsProps> = ({ logs }) => {
             <p>Waiting for analysis...</p>
           </div>
         )}
-        
-        {logs.map((log, idx) => (
-          <div 
-            key={idx} 
-            className={`
-              p-3 rounded border
-              ${log.decision.action === 'switch_strategy' ? 'bg-indigo-950/40 border-indigo-500/50' : 
-                log.decision.action === 'start_run' ? 'bg-emerald-950/40 border-emerald-500/50' :
-                'bg-slate-800/50 border-slate-700'}
-            `}
+
+        {logs.map((log) => (
+          // Keyed by timestamp rather than array index. Index keys are only
+          // safe while a list is strictly append-only.
+          <div
+            key={log.timestamp}
+            className={`p-3 rounded border ${
+              // A 'start_run' branch used to live here, but AgentDecision.action
+              // is typed as 'switch_strategy' | 'explain' and the backend schema
+              // enum permits only those two, so it was unreachable.
+              log.decision.action === 'switch_strategy'
+                ? 'bg-indigo-950/40 border-indigo-500/50'
+                : 'bg-slate-800/50 border-slate-700'
+            }`}
           >
             <div className="flex justify-between items-center mb-2 text-xs text-slate-400">
               <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
               <span className="uppercase font-bold tracking-wider">{log.decision.action}</span>
             </div>
-            
+
             <p className="text-slate-200 mb-2">{log.decision.message}</p>
-            
+
             {log.decision.strategy && (
               <div className="text-xs bg-slate-950 inline-block px-2 py-1 rounded text-indigo-300 border border-indigo-500/30">
                 Strategy: {log.decision.strategy}
