@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   clearDecisions,
   connectWebSocket,
+  fetchAgentInfo,
   runComparison,
   startSimulation,
   stopSimulation,
+  waitForBackend,
 } from './services/simulator';
 import { askGemini } from './services/geminiService';
 import { MetricsCharts } from './components/MetricsCharts';
@@ -13,14 +15,22 @@ import { AgentLogs } from './components/AgentLogs';
 import { ComparisonCharts } from './components/ComparisonCharts';
 import {
   AgentDecision,
+  AgentInfo,
   ComparisonResponse,
   MetricsPayload,
   STRATEGIES,
 } from './types';
-import { Play, Square, Cpu, Activity, GitCompare } from 'lucide-react';
+import { Play, Square, Cpu, Activity, GitCompare, Loader2, WifiOff, Bot } from 'lucide-react';
 
-const GEMINI_THROTTLE_MS = 15_000; // stays under the 5 req/min free tier
+const AGENT_THROTTLE_MS = 15_000; // stays under the 5 req/min free tier
 const HISTORY_LIMIT = 50;
+
+// The strategy a visitor's auto-started run begins on. random_backoff is the
+// most visibly dynamic of the five, so the dashboard has something moving
+// within a second or two of the page settling.
+const DEMO_STRATEGY = 'random_backoff';
+
+type BootState = 'waking' | 'ready' | 'unreachable';
 
 const App: React.FC = () => {
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
@@ -42,29 +52,76 @@ const App: React.FC = () => {
   // automatically, because its output is not agent output.
   const [treatment, setTreatment] = useState<'replay' | 'heuristic'>('replay');
 
+  const [boot, setBoot] = useState<BootState>('waking');
+  const [bootElapsed, setBootElapsed] = useState(0);
+  const [socketUp, setSocketUp] = useState(false);
+  const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
+
   const isRunningRef = useRef(false);
-  const lastGeminiCallRef = useRef<number>(0);
+  const lastAgentCallRef = useRef<number>(0);
+  const bootedRef = useRef(false);
 
   useEffect(() => {
-    const ws = connectWebSocket((data) => {
-      if (!isRunningRef.current) return;
-      setMetrics(data.payload);
-      setRunId(data.run_id);
-      setHistory((prev) => {
-        const next = [...prev, data.payload];
-        return next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
-      });
-    });
+    const ws = connectWebSocket(
+      (data) => {
+        if (!isRunningRef.current) return;
+        setMetrics(data.payload);
+        setRunId(data.run_id);
+        setHistory((prev) => {
+          const next = [...prev, data.payload];
+          return next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
+        });
+      },
+      setSocketUp
+    );
     return () => ws.close();
+  }, []);
+
+  // Boot sequence. A visitor should land on a dashboard that is already
+  // running: the free Render tier sleeps, so the first load has to wait out a
+  // ~20-30s cold start, and an empty page with five buttons reads as broken
+  // rather than idle. Wait for the backend, report what the agent is, then
+  // start a run without anyone having to click.
+  useEffect(() => {
+    if (bootedRef.current) return;
+    bootedRef.current = true;
+
+    let cancelled = false;
+
+    (async () => {
+      const awake = await waitForBackend((_attempt, elapsedMs) => {
+        if (!cancelled) setBootElapsed(Math.round(elapsedMs / 1000));
+      });
+      if (cancelled) return;
+
+      if (!awake) {
+        setBoot('unreachable');
+        return;
+      }
+
+      try {
+        setAgentInfo(await fetchAgentInfo());
+      } catch {
+        // Label is a nicety; a missing one must not block the demo.
+      }
+
+      setBoot('ready');
+      if (!cancelled) await handleStart(DEMO_STRATEGY);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Agent loop, throttled to at most one call per GEMINI_THROTTLE_MS.
   useEffect(() => {
     if (!metrics || isThinking || !isRunningRef.current || !isRunning) return;
-    if (Date.now() - lastGeminiCallRef.current < GEMINI_THROTTLE_MS) return;
+    if (Date.now() - lastAgentCallRef.current < AGENT_THROTTLE_MS) return;
 
     const queryAgent = async () => {
-      lastGeminiCallRef.current = Date.now();
+      lastAgentCallRef.current = Date.now();
       setIsThinking(true);
       try {
         const decision = await askGemini(metrics, runId);
@@ -99,8 +156,10 @@ const App: React.FC = () => {
       setComparison(null);
       setIsComparing(false);
     } catch (e) {
-      console.error(e);
-      alert('Failed to start run');
+      // No alert(): this also runs unattended on page load, and a modal is a
+      // hostile way to greet a visitor. The banner carries the failure.
+      console.error('Failed to start run:', e);
+      setBoot('unreachable');
       isRunningRef.current = false;
       setIsRunning(false);
       setRunId(null);
@@ -152,10 +211,37 @@ const App: React.FC = () => {
             <div className="p-2 bg-indigo-600 rounded-lg">
               <Cpu className="w-6 h-6 text-white" />
             </div>
-            <h1 className="font-bold text-xl tracking-tight text-white">SchedulerAI Orchestrator</h1>
+            <div>
+              <h1 className="font-bold text-xl tracking-tight text-white leading-none">Nova</h1>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                8-node distributed scheduler simulator
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
+            {agentInfo && (
+              <div
+                className={`hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono border ${
+                  agentInfo.is_live_model
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+                title={
+                  agentInfo.is_live_model
+                    ? `Live model decisions via ${agentInfo.provider}`
+                    : 'Demo mode: deterministic rule table, no API key required. Set AGENT_PROVIDER=ollama for live model decisions.'
+                }
+              >
+                <Bot className="w-3.5 h-3.5" />
+                {agentInfo.is_live_model ? agentInfo.model : 'demo: rule-based agent'}
+              </div>
+            )}
+            {!socketUp && boot === 'ready' && (
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
+                <WifiOff className="w-3.5 h-3.5" /> reconnecting
+              </div>
+            )}
             {isThinking && (
               <div className="flex items-center gap-2 text-indigo-400 text-sm animate-pulse">
                 <Activity className="w-4 h-4" /> Agent Analyzing...
@@ -177,6 +263,33 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {boot === 'waking' && (
+            <div className="mb-6 bg-slate-800/70 border border-slate-700 rounded-xl p-5 flex items-start gap-4">
+              <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0 mt-0.5" />
+              <div>
+                <p className="text-white font-medium">Waking the backend…</p>
+                <p className="text-slate-400 text-sm mt-1">
+                  This deployment runs on Render's free tier, which suspends the service
+                  after inactivity. A cold start takes roughly 20–30 seconds
+                  {bootElapsed > 0 && ` (${bootElapsed}s elapsed)`}. A simulation starts
+                  automatically as soon as it answers — nothing to click.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {boot === 'unreachable' && (
+            <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl p-5">
+              <p className="text-red-300 font-medium">Backend unreachable</p>
+              <p className="text-slate-400 text-sm mt-1">
+                The free-tier service did not wake within 90 seconds. Reload to retry, or
+                run it locally — see the README. The measured results in{' '}
+                <code className="text-slate-300">results/</code> are committed to the repo
+                and do not depend on this deployment being up.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             {tiles.map(([label, value, colour]) => (
               <div key={label} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -191,9 +304,14 @@ const App: React.FC = () => {
           {metrics && <ServerGrid servers={metrics.servers} />}
 
           <div className="mt-8 bg-slate-800 p-6 rounded-xl border border-slate-700">
-            <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-              <Play className="w-4 h-4 text-emerald-400" /> Start Simulation
+            <h3 className="text-white font-medium mb-1 flex items-center gap-2">
+              <Play className="w-4 h-4 text-emerald-400" /> Restart with a different strategy
             </h3>
+            <p className="text-slate-400 text-sm mb-4">
+              A run starts automatically on load. Each strategy is a different rule for
+              deciding which of the 8 servers claims the next job; the agent may switch
+              between them while the run is live.
+            </p>
             <div className="flex flex-wrap gap-3">
               {STRATEGIES.map((s) => (
                 <button

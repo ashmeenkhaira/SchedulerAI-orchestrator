@@ -169,8 +169,29 @@ async def switch_strategy(req: SwitchStrategyRequest):
 
 @router.post("/agent/decide")
 async def agent_decide(req: AgentDecideRequest):
-    """Server-side Gemini proxy — keeps GEMINI_API_KEY out of the browser bundle."""
+    """Server-side model proxy — keeps the API key out of the browser bundle."""
     return await get_agent_decision(req.model_dump(exclude_none=True))
+
+
+@router.get("/agent/info")
+async def agent_info():
+    """What is actually answering — so the dashboard can say so.
+
+    The public demo runs the deterministic `mock` provider, which needs no key
+    and costs nothing. A visitor reading agent output has to be able to tell
+    that apart from a real model's decisions; labelling it in the UI is the
+    only honest way to deploy without a key.
+    """
+    provider = settings.AGENT_PROVIDER
+    model = {
+        "ollama": settings.OLLAMA_MODEL,
+        "gemini": settings.GEMINI_MODEL,
+    }.get(provider, "rule-table")
+    return {
+        "provider": provider,
+        "model": model,
+        "is_live_model": provider in ("ollama", "gemini"),
+    }
 
 
 @router.websocket("/ws")

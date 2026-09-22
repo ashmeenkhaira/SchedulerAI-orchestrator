@@ -113,3 +113,11 @@ export interface ComparisonResponse {
     strategies_used_by_treatment: string[];
   };
 }
+
+/** What is actually answering /agent/decide — see api.py::agent_info. */
+export interface AgentInfo {
+  provider: 'ollama' | 'gemini' | 'mock' | string;
+  model: string;
+  /** False for the deterministic rule-table provider used by the public demo. */
+  is_live_model: boolean;
+}
