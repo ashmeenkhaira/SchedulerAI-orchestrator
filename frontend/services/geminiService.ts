@@ -12,8 +12,9 @@ const OFFLINE: AgentDecision = {
 /**
  * Ask the backend agent proxy what to do, then actuate and log the result.
  *
- * The Gemini call itself happens server-side (app/gemini_service.py) so the
- * API key never reaches the browser.
+ * The model call happens server-side (app/agent_service.py), so the API key
+ * never reaches the browser and the provider — Ollama, Gemini or the
+ * deterministic mock — is chosen by backend config, not by this file.
  */
 export const askGemini = async (
   metrics: MetricsPayload,

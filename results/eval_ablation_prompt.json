@@ -1,0 +1,445 @@
+{
+  "generated_at": "2026-09-22 18:38:46 UTC",
+  "config": {
+    "mode": "prompt",
+    "provider": "ollama",
+    "model": "gpt-oss:120b-cloud",
+    "repeats": 3,
+    "temperature": 0.7,
+    "blurb": "Each column is the same model on the same states with a different system prompt. `full` is what the live system ships. `no_ceiling` describes `token_ring` without handing over its throughput ceiling. `minimal` gives strategy names and the output contract only. If `minimal` matches `full`, the prompt engineering is not what is producing the decisions."
+  },
+  "conditions": [
+    "full",
+    "no_ceiling",
+    "minimal"
+  ],
+  "reference": "full",
+  "results": {
+    "full": {
+      "idle": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.746,
+        "held": 3,
+        "sample_message": "The system is idle: queue_len is 0 and stable (queue_rate 0), with no failed servers. Baseline performs well under light, stable load and the slight fairness variance (0.5) is acceptable. Since the current strategy has likely been in place for many steps and there is no throughput pressure, we keep baseline."
+      },
+      "light_stable": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.238,
+        "held": 3,
+        "sample_message": "(1) The queue is short (8) and stable (queue_rate\u202f=\u202f0), no server failures, and load is light. (2) I considered token_ring for better fairness, but its throughput ceiling would risk queue growth on any spike, and the current fairness deviation (std\u202f=\u202f2) is acceptable under baseline. (3) I will keep baseline, expecting the queue to remain stable and throughput to stay adequate over the next 15\u201130 steps."
+      },
+      "deep_stable": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "random_backoff": 1,
+          "baseline": 2
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 6.333,
+        "held": 2,
+        "sample_message": "(1) Queue length is stable at 60 with zero growth, but fairness_std of 2.0 shows imbalance under the fixed-order baseline. (2) Switching to random_backoff will spread job claims more evenly across servers, improving fairness at the cost of a modest latency increase that is acceptable given the stable load. (3) Over the next 15\u201130 steps I expect fairness_std to drop toward 1.0 while the queue remains stable and avg_wait stays roughly unchanged."
+      },
+      "growing": {
+        "modal_choice": "random_backoff",
+        "distribution": {
+          "random_backoff": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.918,
+        "held": 0,
+        "sample_message": "(1) Queue length is rising at +3 jobs/step, indicating the system is falling behind; fairness is modestly uneven (std 2.0) but throughput is the priority. (2) Random_backoff spreads contention across all servers and avoids the low\u2011ID overload seen with baseline, whereas leader_election would add a central bottleneck; consistent_hash isn\u2019t needed without failures. (3) Switching should increase overall job assignment rate and start bringing the queue down over the next 15\u201130 steps."
+      },
+      "draining": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 7.929,
+        "held": 3,
+        "sample_message": "(1) The queue is currently draining at -2 jobs/step with no server failures, indicating the system is keeping up with load. (2) Switching to a fairness\u2011focused strategy like token_ring would unnecessarily throttle throughput, and random_backoff or leader_election add latency or coordination overhead not needed in this light, stable condition. (3) Keeping baseline will continue to clear the backlog quickly while maintaining low overhead; over the next 15\u201130 steps we expect the queue to keep draining and fairness to gradually improve as low\u2011ID servers finish their work."
+      },
+      "failures": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.59,
+        "held": 0,
+        "sample_message": "The queue is growing (+0.5 jobs/step) while three of eight servers are down, indicating risk of jobs stuck on failed nodes; baseline\u2019s fixed ordering would keep assigning to the same low\u2011ID servers that may be overloaded or failed. With >=3 failures the policy mandates moving to consistent_hash to reroute jobs away from failed servers and preserve in\u2011flight work. Switching now should stop further queue buildup and improve throughput over the next 15\u201130 steps, even if it may slightly increase fairness variance."
+      },
+      "unfair_calm": {
+        "modal_choice": "random_backoff",
+        "distribution": {
+          "baseline": 1,
+          "random_backoff": 2
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 7.664,
+        "held": 1,
+        "sample_message": "(1) The queue is stable (len\u202f10, rate\u202f0) with no server failures; baseline handles light, steady load well. (2) Token_ring could improve fairness but would halve throughput and we lack evidence of a sustained backlog, plus we haven't held the current strategy for the required 20\u201130 steps. (3) We will keep baseline, expecting the queue to stay stable and fairness to gradually even out over the next 15\u201130 steps."
+      },
+      "unfair_growing": {
+        "modal_choice": "random_backoff",
+        "distribution": {
+          "random_backoff": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 6.399,
+        "held": 0,
+        "sample_message": "(1) The queue is growing rapidly (+3 jobs/step) and fairness is poor (std 10), indicating baseline is overloaded and skewed. (2) Switching to random_backoff would spread contention across servers, improving throughput at the cost of a slight latency increase under low load, which is acceptable now. (3) Over the next 15\u201130 steps we expect the queue to stop growing and begin draining while fairness gradually improves."
+      }
+    },
+    "no_ceiling": {
+      "idle": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.988,
+        "held": 3,
+        "sample_message": "(1) The system has no pending jobs and the queue is stable (queue_len=0, queue_rate=0). No servers are failing and fairness deviation is low (0.5). (2) Alternatives like random_backoff or consistent_hash would add unnecessary latency or complexity under these light conditions, while token_ring or leader_election would serialize dispatch and reduce throughput. (3) I will keep the baseline strategy, which is optimal for light, stable load, and expect the queue to remain empty and fairness to stay acceptable over the next 15\u201130 steps."
+      },
+      "light_stable": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 4.273,
+        "held": 3,
+        "sample_message": "(1) The queue is short (8) and stable (queue_rate 0), with no server failures. (2) Baseline handles light, stable load well; alternatives like token_ring would improve fairness but add coordination overhead that isn\u2019t needed now. (3) I will keep baseline and expect the queue to remain drained and latency low over the next 15\u201130 steps, while fairness stays acceptable."
+      },
+      "deep_stable": {
+        "modal_choice": "token_ring",
+        "distribution": {
+          "token_ring": 2,
+          "baseline": 1
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.999,
+        "held": 1,
+        "sample_message": "(1) The queue is stable (queue_rate\u202f=\u202f0) but fairness_std\u202f=\u202f2.0 shows imbalance under baseline. (2) I considered random_backoff (adds latency) and token_ring (offers perfect fairness with modest throughput impact). I reject random_backoff and choose token_ring to prioritize fairness now that throughput is adequate. (3) Over the next 15\u201130 steps I expect the queue length to stay steady while fairness_std drops toward 0, with only a slight rise in avg_wait."
+      },
+      "growing": {
+        "modal_choice": "random_backoff",
+        "distribution": {
+          "random_backoff": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.918,
+        "held": 0,
+        "sample_message": "(1) The queue is growing rapidly (+3 jobs/step) indicating the baseline is not keeping up, and fairness is already moderate (std 2). (2) I considered leader_election for aggressive dispatch but it adds coordination overhead and can become a bottleneck; random_backoff spreads contention and boosts throughput under sustained high load with minimal latency penalty. (3) Switching to random_backoff should increase parallel job claims and start reducing the queue over the next 15\u201130 steps, while fairness will naturally improve as load balances across all servers."
+      },
+      "draining": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 4.385,
+        "held": 3,
+        "sample_message": "(1) The queue is shrinking at -2 jobs/step with no server failures, indicating light, stable load. (2) I considered token_ring for perfect fairness, but its serialized dispatch would add latency unnecessary while the system is already draining; random_backoff would also add latency. (3) Baseline remains appropriate and should keep the queue draining and fairness gradually improving over the next 15\u201130 steps."
+      },
+      "failures": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.23,
+        "held": 0,
+        "sample_message": "(1) The queue is growing (+0.5 jobs/step) and three servers have failed, causing jobs to return to the front of the queue. (2) Baseline cannot reroute work from failed nodes, whereas consistent_hash will automatically hash jobs to healthy servers, preserving throughput. (3) Over the next 15\u201130 steps we expect the queue to stop growing and begin draining as jobs are reassigned to the remaining five healthy servers."
+      },
+      "unfair_calm": {
+        "modal_choice": "token_ring",
+        "distribution": {
+          "token_ring": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.514,
+        "held": 0,
+        "sample_message": "(1) Queue is stable (len 10, rate 0) with no failures, but fairness_std is high (10). (2) Switching to token_ring will give perfect fairness at the cost of slightly higher latency, which is acceptable given the low, steady load. (3) Over the next 15\u201130 steps I expect the queue to remain stable while completed\u2011job counts converge, achieving near\u2011zero fairness deviation."
+      },
+      "unfair_growing": {
+        "modal_choice": "random_backoff",
+        "distribution": {
+          "random_backoff": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 8.248,
+        "held": 0,
+        "sample_message": "(1) Queue is growing rapidly (+3 jobs/step) and fairness is poor (std 10), indicating baseline is overloaded under sustained load. (2) Considered consistent_hash for failure resilience, but no failures and it may still unevenly hash jobs; random_backoff better utilizes all servers under high load despite slight latency. (3) Switching should improve throughput, reducing queue_len and stabilizing or draining the queue over the next 15\u201130 steps."
+      }
+    },
+    "minimal": {
+      "idle": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.479,
+        "held": 3,
+        "sample_message": "The system is idle (queue_len 0, no failures) and performance metrics are stable; no need to change from the baseline strategy."
+      },
+      "light_stable": {
+        "modal_choice": "token_ring",
+        "distribution": {
+          "token_ring": 2,
+          "baseline": 1
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 4.177,
+        "held": 1,
+        "sample_message": "Fairness deviation is high (2.0) and queue length is growing; token_ring provides strict round\u2011robin fairness to reduce wait time and balance load across servers."
+      },
+      "deep_stable": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 2,
+          "token_ring": 1
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.786,
+        "held": 0,
+        "sample_message": "High queue length (60) and elevated average wait (4.0) indicate load imbalance under baseline. Switching to consistent_hash will better distribute jobs across the 8 servers, reducing wait times and improving fairness."
+      },
+      "growing": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.874,
+        "held": 0,
+        "sample_message": "Queue length is increasing and fairness_std is elevated, indicating uneven load; switching to consistent_hash will better distribute jobs across the 8 servers."
+      },
+      "draining": {
+        "modal_choice": "baseline",
+        "distribution": {
+          "baseline": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 3.937,
+        "held": 3,
+        "sample_message": "Queue length is decreasing, no failures, and wait times are moderate, so the baseline strategy remains appropriate."
+      },
+      "failures": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 3
+        },
+        "consistency": 1.0,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 4.038,
+        "held": 0,
+        "sample_message": "Avg wait time and queue length are rising, and fairness deviation is high. Switching to consistent_hash should better distribute load across the 8 servers, reducing wait times and improving fairness."
+      },
+      "unfair_calm": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 2,
+          "token_ring": 1
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 4.237,
+        "held": 0,
+        "sample_message": "High fairness deviation (std=10) and growing queue indicate uneven load; consistent hashing will better distribute jobs across the 8 servers."
+      },
+      "unfair_growing": {
+        "modal_choice": "consistent_hash",
+        "distribution": {
+          "consistent_hash": 2,
+          "token_ring": 1
+        },
+        "consistency": 0.6667,
+        "valid": 3,
+        "repeats": 3,
+        "errors": [],
+        "mean_latency_s": 5.772,
+        "held": 0,
+        "sample_message": "Fairness deviation is high (std=10) and queue is building; switching to consistent_hash should better distribute jobs across servers, improving fairness and reducing wait times."
+      }
+    }
+  },
+  "comparison": {
+    "no_ceiling": {
+      "states_changed": [
+        "deep_stable",
+        "unfair_calm"
+      ],
+      "agreement_with_reference": 0.75
+    },
+    "minimal": {
+      "states_changed": [
+        "deep_stable",
+        "growing",
+        "light_stable",
+        "unfair_calm",
+        "unfair_growing"
+      ],
+      "agreement_with_reference": 0.375
+    }
+  },
+  "states": {
+    "idle": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 0,
+      "queue_rate": 0.0,
+      "num_failed": 0,
+      "fairness_std": 0.5
+    },
+    "light_stable": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 8,
+      "queue_rate": 0.0,
+      "num_failed": 0,
+      "fairness_std": 2.0
+    },
+    "deep_stable": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 60,
+      "queue_rate": 0.0,
+      "num_failed": 0,
+      "fairness_std": 2.0
+    },
+    "growing": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 15,
+      "queue_rate": 3.0,
+      "num_failed": 0,
+      "fairness_std": 2.0
+    },
+    "draining": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 25,
+      "queue_rate": -2.0,
+      "num_failed": 0,
+      "fairness_std": 2.0
+    },
+    "failures": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 15,
+      "queue_rate": 0.5,
+      "num_failed": 3,
+      "fairness_std": 2.0
+    },
+    "unfair_calm": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 10,
+      "queue_rate": 0.0,
+      "num_failed": 0,
+      "fairness_std": 10.0
+    },
+    "unfair_growing": {
+      "time": 150,
+      "completed_total": 80,
+      "avg_wait": 4.0,
+      "strategy": "baseline",
+      "queue_len": 30,
+      "queue_rate": 3.0,
+      "num_failed": 0,
+      "fairness_std": 10.0
+    }
+  }
+}

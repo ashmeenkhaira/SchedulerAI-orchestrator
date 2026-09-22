@@ -13,8 +13,9 @@ one was broken before the engine was unified:
             recorded step, with no hysteresis gate applied to them.
 """
 
-import sys
 import os
+import statistics
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -248,6 +249,185 @@ def test_summarise_reports_every_metric():
     for key in ("avg_queue_len", "avg_wait", "avg_turnaround", "throughput",
                 "jobs_completed", "avg_fairness_std", "starvation_steps"):
         assert key in s, f"summarise() is missing {key}"
+
+
+# --- 6. Lookahead forking ---
+#
+# The oracle in eval_oracle.py is only meaningful if a fork is a faithful
+# continuation of the parent and if the forks differ *only* by strategy. Both
+# are asserted here rather than assumed.
+
+def test_fork_continues_the_parent_trajectory_exactly():
+    """A fork that keeps the parent's strategy must do what the parent would."""
+    parent = _engine("consistent_hash", seed=21)
+    parent.run_steps(60)
+
+    twin = parent.fork()
+    twin.run_steps(40)
+    parent.run_steps(40)
+
+    assert twin.time_step == parent.time_step
+    assert twin.jobs_arrived == parent.jobs_arrived
+    assert twin.jobs_completed == parent.jobs_completed
+    assert [s.completed_count for s in twin.servers] == \
+           [s.completed_count for s in parent.servers]
+
+
+def test_forks_see_identical_workload_whatever_strategy_they_run():
+    """CRN again, but at a mid-run fork point rather than from step 0.
+
+    This is the guarantee the lookahead depends on: five candidate rollouts
+    from one state differ by strategy and by nothing else.
+    """
+    parent = _engine("baseline", seed=22)
+    parent.run_steps(80)
+
+    traces = {}
+    for strategy in STRATEGIES:
+        twin = parent.fork(strategy)
+        twin.run_steps(50)
+        traces[strategy] = (
+            twin.jobs_arrived - parent.jobs_arrived,
+            [m["num_failed"] for m in twin.metrics_history],
+        )
+
+    reference = traces["baseline"]
+    for strategy, trace in traces.items():
+        assert trace == reference, f"fork running {strategy} saw a different workload"
+
+
+def test_fork_leaves_the_parent_untouched():
+    parent = _engine("token_ring", seed=23)
+    parent.run_steps(70)
+    before = (parent.time_step, parent.jobs_arrived, parent.jobs_completed,
+              len(parent.queue), parent.strategy, len(parent.metrics_history),
+              len(parent.completed_jobs))
+
+    for strategy in STRATEGIES:
+        parent.fork(strategy).run_steps(60)
+
+    after = (parent.time_step, parent.jobs_arrived, parent.jobs_completed,
+             len(parent.queue), parent.strategy, len(parent.metrics_history),
+             len(parent.completed_jobs))
+    assert before == after, "forking mutated the parent engine"
+
+
+def test_fork_history_covers_only_the_lookahead_window():
+    """avg_queue_len() on a fork must describe the window, not the run so far."""
+    parent = _engine("baseline", seed=24)
+    parent.run_steps(100)
+    twin = parent.fork("leader_election")
+    twin.run_steps(30)
+    assert len(twin.metrics_history) == 30
+    assert twin.metrics_history[0]["time"] == 101
+
+
+def test_fork_rejects_unknown_strategy():
+    parent = _engine("baseline", seed=25)
+    parent.run_steps(10)
+    try:
+        parent.fork("nope")
+    except ValueError:
+        return
+    raise AssertionError("fork() accepted an unknown strategy")
+
+
+# --- 7. Work conservation ---
+#
+# These pin the structural claim the whole evaluation rests on: strategies that
+# never idle a free server beside a queued job cannot differ in throughput, so
+# throughput is not something a switching policy can win. See
+# eval_mechanism.py.
+
+def test_dispatch_accounting_never_exceeds_opportunity():
+    for strategy in STRATEGIES:
+        e = _engine(strategy, seed=31)
+        e.run_steps(500)
+        assert 0 <= e.dispatch_used <= e.dispatch_opportunities
+        assert 0.0 <= e.work_conservation() <= 1.0
+
+
+def test_three_strategies_are_perfectly_work_conserving():
+    for strategy in ("baseline", "consistent_hash", "leader_election"):
+        e = _engine(strategy, seed=32)
+        e.run_steps(500)
+        assert e.work_conservation() == 1.0, \
+            f"{strategy} idled a free server beside a queued job"
+
+
+def test_token_ring_declines_most_of_its_dispatch_opportunities():
+    """Its throughput ceiling is a refusal to dispatch, not slow servers."""
+    e = _engine("token_ring", seed=32)
+    e.run_steps(500)
+    assert e.work_conservation() < 0.3
+
+
+def _throughputs_of_conserving_strategies(seed, steps):
+    values = []
+    for strategy in ("baseline", "consistent_hash", "leader_election"):
+        e = _engine(strategy, seed=seed)
+        e.run_steps(steps)
+        assert e.work_conservation() == 1.0
+        values.append(e.throughput())
+    return values
+
+
+def test_work_conserving_strategies_share_one_throughput_absent_failures():
+    """The finding that closes the throughput axis, in its exact form.
+
+    With no failures, the three work-conserving strategies are not merely
+    close — they are identical to the last bit. They dispatch on exactly the
+    same steps and complete exactly the same jobs; all they disagree on is
+    which server did the work. Dispatch policy contributes nothing to
+    throughput.
+    """
+    import app.scheduler_engine as engine_module
+
+    original = engine_module.FAILURE_PROB
+    engine_module.FAILURE_PROB = 0.0
+    try:
+        throughputs = _throughputs_of_conserving_strategies(seed=33, steps=600)
+    finally:
+        engine_module.FAILURE_PROB = original
+
+    assert max(throughputs) - min(throughputs) == 0.0, \
+        f"work-conserving strategies disagreed without failures: {throughputs}"
+
+
+def test_failures_introduce_only_a_second_order_throughput_difference():
+    """Why the exact equality above becomes approximate in the real engine.
+
+    A failure preempts the in-flight job and discards the work done on it.
+    *Which* job is in flight depends on which server received it — the one
+    thing work-conserving strategies do differ on. So the residual throughput
+    spread is a downstream consequence of the fairness difference, not an
+    independent axis a switching policy could exploit: it stays within a few
+    percent while the fairness spread is severalfold.
+    """
+    throughputs = _throughputs_of_conserving_strategies(seed=33, steps=600)
+    spread = max(throughputs) - min(throughputs)
+    assert 0 < spread < 0.05 * statistics.fmean(throughputs), \
+        f"expected a small failure-driven spread, got {throughputs}"
+
+
+def test_fairness_is_the_axis_that_actually_varies():
+    """The counterpart: what strategy choice does control."""
+    fairness = {}
+    for strategy in STRATEGIES:
+        e = _engine(strategy, seed=33)
+        e.run_steps(600)
+        fairness[strategy] = e.fairness_std()
+    assert max(fairness.values()) / min(fairness.values()) > 2.0, \
+        f"expected a severalfold fairness spread, got {fairness}"
+
+
+def test_forked_engine_keeps_dispatch_accounting_consistent():
+    parent = _engine("baseline", seed=34)
+    parent.run_steps(100)
+    twin = parent.fork("token_ring")
+    twin.run_steps(100)
+    assert twin.dispatch_opportunities >= parent.dispatch_opportunities
+    assert twin.dispatch_used >= parent.dispatch_used
 
 
 if __name__ == "__main__":

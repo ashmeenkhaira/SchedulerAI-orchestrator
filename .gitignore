@@ -18,6 +18,12 @@ __pycache__/
 *.pyc
 *.db
 
+# Secrets. .env holds real API keys and must never be committed;
+# .env.example is the checked-in template and must stay tracked.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

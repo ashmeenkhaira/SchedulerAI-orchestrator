@@ -1,6 +1,7 @@
 # Target path in your project: app/scheduler_engine.py
 
 import asyncio
+import copy
 import random
 from collections import deque
 from typing import Callable, List, Optional
@@ -152,6 +153,19 @@ class SimEngine:
         self.token_position = 0
         self.leader_id = 0
 
+        # Work-conservation accounting. At each step, `dispatch_opportunities`
+        # grows by min(available servers, queued jobs) — the number of
+        # assignments a scheduler *could* have made — and `dispatch_used` by
+        # the number it actually made. A strategy that always assigns when it
+        # can is work-conserving, and work-conserving schedulers cannot differ
+        # from one another in throughput or backlog: they differ only in which
+        # server receives the job, i.e. in fairness.
+        #
+        # This is the measurement that explains the comparison results, so it
+        # is recorded by the engine rather than reconstructed afterwards.
+        self.dispatch_opportunities = 0
+        self.dispatch_used = 0
+
         self.record_history = record_history
         self.metrics_history: List[dict] = []
 
@@ -199,6 +213,37 @@ class SimEngine:
                     self.strategy = chosen
             self.step()
 
+    def fork(self, strategy: Optional[str] = None) -> "SimEngine":
+        """A deep copy of the live state, optionally switched to `strategy`.
+
+        This is what makes lookahead evaluation possible. The evaluator forks
+        the current state once per candidate strategy and runs each fork
+        forward the same number of steps. All three RNG streams are copied
+        with their internal state intact, so every fork draws the identical
+        arrival and failure sequence — the forks differ only in the strategy
+        they run, which is the entire point of the comparison.
+
+        The per-job audit log is dropped: those are SQLModel rows destined for
+        the database, a fork is never persisted, and copying them is pure
+        cost. `metrics_history` starts empty so that a fork's own metrics
+        describe the lookahead window alone rather than the run so far.
+        """
+        if strategy is not None and strategy not in STRATEGIES:
+            raise ValueError(f"Unknown strategy: {strategy!r}. Expected one of {STRATEGIES}")
+
+        saved_jobs, saved_history = self.completed_jobs, self.metrics_history
+        self.completed_jobs, self.metrics_history = [], []
+        try:
+            twin = copy.deepcopy(self)
+        finally:
+            self.completed_jobs, self.metrics_history = saved_jobs, saved_history
+
+        twin.record_history = True
+        twin.running = False
+        if strategy is not None:
+            twin.strategy = strategy
+        return twin
+
     # --- Core step ---
 
     def _current_arrival_prob(self) -> float:
@@ -227,7 +272,13 @@ class SimEngine:
             self.queue.append(self._new_job())
             self.jobs_arrived += 1
 
+        dispatchable = min(
+            sum(1 for s in self.servers if s.available), len(self.queue)
+        )
+        assigned_before = self.jobs_assigned
         self._execute_strategy()
+        self.dispatch_opportunities += dispatchable
+        self.dispatch_used += min(dispatchable, self.jobs_assigned - assigned_before)
 
         for server in self.servers:
             # A failed server makes no progress on its in-flight job. It used
@@ -415,6 +466,17 @@ class SimEngine:
 
     def throughput(self) -> float:
         return self.jobs_completed / self.time_step if self.time_step else 0.0
+
+    def work_conservation(self) -> float:
+        """Fraction of possible assignments the strategy actually made.
+
+        1.0 means fully work-conserving: a free server never sat idle beside a
+        queued job. Anything below that is dispatch capacity the strategy
+        declined to use.
+        """
+        if not self.dispatch_opportunities:
+            return 1.0
+        return self.dispatch_used / self.dispatch_opportunities
 
     def avg_queue_len(self) -> float:
         if not self.metrics_history:

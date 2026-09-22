@@ -11,7 +11,7 @@ from sqlmodel import select
 
 from app.config import settings
 from app.database import get_session
-from app.gemini_service import get_agent_decision
+from app.agent_service import get_agent_decision
 from app.models import GeminiDecision, Run
 from app.scheduler_engine import STRATEGIES, SimEngine
 

@@ -8,6 +8,17 @@ services:
     plan: free
     healthCheckPath: /
     envVars:
+      # Which model backs the agent: ollama | gemini | mock.
+      # `mock` is a deterministic rule table needing no key, so the deployed
+      # dashboard still runs end-to-end without one.
+      - key: AGENT_PROVIDER
+        value: mock
+      - key: OLLAMA_BASE_URL
+        value: https://ollama.com
+      - key: OLLAMA_MODEL
+        value: gpt-oss:120b-cloud
+      - key: OLLAMA_API_KEY
+        sync: false # set manually in the Render dashboard — never commit this
       - key: GEMINI_API_KEY
         sync: false # set manually in the Render dashboard — never commit this
       - key: CORS_ORIGINS

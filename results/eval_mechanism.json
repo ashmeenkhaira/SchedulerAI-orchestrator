@@ -1,0 +1,244 @@
+{
+  "generated_at": "2026-09-22 17:07:32 UTC",
+  "config": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "steps": 600,
+    "num_servers": 8,
+    "arrival_prob": 0.6,
+    "mean_services": [
+      6.0,
+      8.0,
+      12.0,
+      16.0
+    ],
+    "work_conserving_threshold": 0.999
+  },
+  "regimes": [
+    {
+      "mean_service": 6.0,
+      "capacity_jobs_per_step": 1.3333,
+      "peak_offered_load": 0.95,
+      "utilisation_at_peak": 0.7125,
+      "per_strategy": {
+        "baseline": {
+          "work_conservation": 1.0,
+          "throughput": 0.664,
+          "avg_queue_len": 0.2987,
+          "fairness_std": 24.9423
+        },
+        "random_backoff": {
+          "work_conservation": 0.8064,
+          "throughput": 0.663,
+          "avg_queue_len": 0.4563,
+          "fairness_std": 7.2353
+        },
+        "consistent_hash": {
+          "work_conservation": 1.0,
+          "throughput": 0.664,
+          "avg_queue_len": 0.2657,
+          "fairness_std": 5.6917
+        },
+        "token_ring": {
+          "work_conservation": 0.1217,
+          "throughput": 0.5013,
+          "avg_queue_len": 43.7797,
+          "fairness_std": 3.2359
+        },
+        "leader_election": {
+          "work_conservation": 1.0,
+          "throughput": 0.664,
+          "avg_queue_len": 0.2707,
+          "fairness_std": 15.9853
+        }
+      },
+      "work_conserving": [
+        "baseline",
+        "consistent_hash",
+        "leader_election"
+      ],
+      "throughput_spread_within_conserving": 0.0,
+      "fairness_spread_all": 21.7064,
+      "fairness_ratio_all": 7.708
+    },
+    {
+      "mean_service": 8.0,
+      "capacity_jobs_per_step": 1.0,
+      "peak_offered_load": 0.95,
+      "utilisation_at_peak": 0.95,
+      "per_strategy": {
+        "baseline": {
+          "work_conservation": 1.0,
+          "throughput": 0.6553,
+          "avg_queue_len": 1.9933,
+          "fairness_std": 13.0804
+        },
+        "random_backoff": {
+          "work_conservation": 0.8276,
+          "throughput": 0.6533,
+          "avg_queue_len": 2.5363,
+          "fairness_std": 7.5661
+        },
+        "consistent_hash": {
+          "work_conservation": 1.0,
+          "throughput": 0.6567,
+          "avg_queue_len": 1.957,
+          "fairness_std": 5.4563
+        },
+        "token_ring": {
+          "work_conservation": 0.1253,
+          "throughput": 0.443,
+          "avg_queue_len": 57.302,
+          "fairness_std": 3.5842
+        },
+        "leader_election": {
+          "work_conservation": 1.0,
+          "throughput": 0.6547,
+          "avg_queue_len": 2.0217,
+          "fairness_std": 7.3438
+        }
+      },
+      "work_conserving": [
+        "baseline",
+        "consistent_hash",
+        "leader_election"
+      ],
+      "throughput_spread_within_conserving": 0.002,
+      "fairness_spread_all": 9.4962,
+      "fairness_ratio_all": 3.649
+    },
+    {
+      "mean_service": 12.0,
+      "capacity_jobs_per_step": 0.6667,
+      "peak_offered_load": 0.95,
+      "utilisation_at_peak": 1.425,
+      "per_strategy": {
+        "baseline": {
+          "work_conservation": 1.0,
+          "throughput": 0.5677,
+          "avg_queue_len": 21.574,
+          "fairness_std": 6.8305
+        },
+        "random_backoff": {
+          "work_conservation": 0.9528,
+          "throughput": 0.5593,
+          "avg_queue_len": 24.1353,
+          "fairness_std": 6.94
+        },
+        "consistent_hash": {
+          "work_conservation": 1.0,
+          "throughput": 0.5667,
+          "avg_queue_len": 22.157,
+          "fairness_std": 6.7074
+        },
+        "token_ring": {
+          "work_conservation": 0.1315,
+          "throughput": 0.3593,
+          "avg_queue_len": 78.951,
+          "fairness_std": 3.5277
+        },
+        "leader_election": {
+          "work_conservation": 1.0,
+          "throughput": 0.5663,
+          "avg_queue_len": 22.4847,
+          "fairness_std": 5.3127
+        }
+      },
+      "work_conserving": [
+        "baseline",
+        "consistent_hash",
+        "leader_election"
+      ],
+      "throughput_spread_within_conserving": 0.0014,
+      "fairness_spread_all": 3.4123,
+      "fairness_ratio_all": 1.967
+    },
+    {
+      "mean_service": 16.0,
+      "capacity_jobs_per_step": 0.5,
+      "peak_offered_load": 0.95,
+      "utilisation_at_peak": 1.9,
+      "per_strategy": {
+        "baseline": {
+          "work_conservation": 1.0,
+          "throughput": 0.4303,
+          "avg_queue_len": 58.7897,
+          "fairness_std": 5.7504
+        },
+        "random_backoff": {
+          "work_conservation": 0.9689,
+          "throughput": 0.4273,
+          "avg_queue_len": 58.7103,
+          "fairness_std": 5.2074
+        },
+        "consistent_hash": {
+          "work_conservation": 1.0,
+          "throughput": 0.4313,
+          "avg_queue_len": 58.9383,
+          "fairness_std": 4.7317
+        },
+        "token_ring": {
+          "work_conservation": 0.1296,
+          "throughput": 0.294,
+          "avg_queue_len": 95.6563,
+          "fairness_std": 3.3583
+        },
+        "leader_election": {
+          "work_conservation": 1.0,
+          "throughput": 0.4227,
+          "avg_queue_len": 59.2703,
+          "fairness_std": 5.2465
+        }
+      },
+      "work_conserving": [
+        "baseline",
+        "consistent_hash",
+        "leader_election"
+      ],
+      "throughput_spread_within_conserving": 0.0086,
+      "fairness_spread_all": 2.3921,
+      "fairness_ratio_all": 1.712
+    }
+  ],
+  "failures_disabled_control": {
+    "mean_service": 12.0,
+    "per_strategy": {
+      "baseline": {
+        "work_conservation": 1.0,
+        "throughput": 0.606,
+        "fairness_std": 8.278643
+      },
+      "random_backoff": {
+        "work_conservation": 0.909991,
+        "throughput": 0.603667,
+        "fairness_std": 6.179396
+      },
+      "consistent_hash": {
+        "work_conservation": 1.0,
+        "throughput": 0.606,
+        "fairness_std": 6.657649
+      },
+      "token_ring": {
+        "work_conservation": 0.131987,
+        "throughput": 0.413667,
+        "fairness_std": 3.272037
+      },
+      "leader_election": {
+        "work_conservation": 1.0,
+        "throughput": 0.606,
+        "fairness_std": 5.985422
+      }
+    },
+    "work_conserving": [
+      "baseline",
+      "consistent_hash",
+      "leader_election"
+    ],
+    "throughput_spread_within_conserving": 0.0
+  }
+}

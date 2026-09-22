@@ -1,447 +1,334 @@
-# SchedulerAI Orchestrator
+# SchedulerAI
 
-> **AI-guided dynamic scheduling strategy selection for distributed job queues,
-> with a statistically controlled A/B comparison engine using Common Random Numbers.**
+A student project. It simulates a distributed job scheduler across 8 servers,
+lets a language model pick the scheduling strategy at runtime, and — the part
+worth reading — measures whether letting it do that is worth anything.
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react)](https://react.dev)
-[![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4?logo=google)](https://aistudio.google.com)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+The interesting result is mostly negative, and finding it is what the project
+is actually about.
 
 ---
 
-## Table of Contents
+## What this started as, and what it became
 
-- [Overview](#overview)
-- [Key Results](#key-results)
-- [Architecture](#architecture)
-- [Scheduling Algorithms](#scheduling-algorithms)
-- [AI Orchestration Layer](#ai-orchestration-layer)
-- [Comparison Engine](#comparison-engine)
-- [System Flow](#system-flow)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [Honest Limitations](#honest-limitations)
-- [What I Would Do Next](#what-i-would-do-next)
+The original version of this README claimed that AI-guided switching cut queue
+length 88% and raised throughput 41%. Those numbers were real outputs of a
+working comparison. They were also an artifact of which fixed strategy had been
+picked as the opponent, and I could not have told you that without building
+something to check.
 
----
+So I built the check. It says:
 
-## Overview
+- **Throughput headroom from switching strategies is 0.0%.** Not small —
+  zero. Three of the five strategies are perfectly work-conserving and produce
+  byte-identical throughput. No switching policy can improve on that, because
+  there is nothing there to improve.
+- **A +41% throughput figure is still obtainable** — by comparing against
+  `token_ring`, which declines ~86% of its chances to dispatch a job by design.
+  That number measures the opponent, not the agent.
+- **Fairness is the one axis with real headroom,** and switching genuinely
+  helps there: a policy with foresight beats *four of the five* fixed
+  strategies on backlog *and* fairness simultaneously, which no single fixed
+  strategy manages.
+- **A 12-line rule table is worse than not switching at all.** It is dominated
+  by three of the five fixed strategies.
 
-SchedulerAI simulates a distributed job scheduler across an **8-node cluster**,
-where an **LLM agent (Gemini 2.5 Flash)** monitors real-time system metrics
-every 15 seconds and dynamically switches between 5 scheduling strategies based
-on current load conditions, server health, and fairness degradation signals.
-
-The core engineering challenge was building a **comparison engine that is
-actually fair** — one where the only variable between the AI-guided arm and the
-static-strategy arm is the scheduling decisions themselves, not the underlying
-randomness. This was solved using **Common Random Numbers (CRN)** methodology,
-a technique from discrete-event simulation used to isolate treatment effects.
-
-**This is not a toy demo.** The algorithms implemented (consistent hashing,
-token ring, leader election) are the same primitives used in production systems
-like Apache Kafka, Apache ZooKeeper, and Amazon DynamoDB. The comparison
-methodology addresses a real gap in how LLM-for-systems papers validate results.
+That last pair is the setup: switching has real value, and the obvious cheap
+heuristic fails to capture it. Whether a language model can is the open
+question the harness exists to answer.
 
 ---
 
-## Key Results
+## The measurements
 
-> All results from run #43: `random_backoff` start strategy,
-> `arrival_prob=0.6`, `seed=1`, `202 steps`.
-> Comparison against static `random_backoff` under identical
-> CRN-controlled load conditions.
+Three scripts, one question each. All three run offline with no API key; only
+the `agent` policy needs a model.
 
-| Metric | With Gemini AI | Static `random_backoff` | Delta |
-|--------|---------------|------------------------|-------|
-| Avg Queue Length | **1.6** | 13.8 | **−88%** |
-| Jobs Completed | **128** | 91 | **+41%** |
-| Strategy Divergence | 182 / 202 steps | — | 90% of run |
-| Autonomous Decisions | **14** | 0 | — |
+| Script | Question |
+|---|---|
+| `backend/eval_mechanism.py` | Why can't strategy choice move throughput? |
+| `backend/eval_oracle.py` | Who captures the value that *is* available? |
+| `backend/eval_probe.py` | What decision function is the model implementing? |
+| `backend/eval_ablation.py` | Which component is actually producing the decisions? |
 
-### Why random_backoff collapses under sustained load
+641 live model calls back the results below, all against
+`gpt-oss:120b` via Ollama.
 
-Under high arrival rates, `random_backoff` causes contention cascades —
-multiple servers compete for the same job, the loser backs off for 2–6 steps,
-during which it processes nothing. At `arrival_prob ≥ 0.6`, these cascades
-compound faster than they resolve, causing the queue to grow unboundedly
-(avg 13.8 over 202 steps). The AI agent recognized this and switched away
-within the first heavy-load window.
+### 1. Why throughput is closed
 
-### Fairness improvement across all comparisons
+Cluster capacity is `num_servers / mean_service` jobs per step and owes nothing
+to the scheduling strategy. A strategy is **work-conserving** if it never
+leaves a server idle beside a queued job; the engine counts the assignments
+each strategy could have made against the ones it made.
 
-Across all 5 static strategy comparisons, Gemini's AI arm consistently showed
-lower `fairness_std` (standard deviation of completed jobs across servers).
-This was the single most consistent finding across runs.
+5 seeds x 600 steps, 8 servers, `mean_service=12`, **failures disabled**:
 
-| Comparison | AI Fairness Std | Static Fairness Std |
-|------------|----------------|---------------------|
-| vs baseline | ~1.9 | ~3.8 |
-| vs random_backoff | ~2.1 | ~2.8 |
-| vs consistent_hash | ~1.9 | ~2.9 |
-| vs token_ring | ~2.4 | ~4.2 |
-| vs leader_election | ~2.0 | ~4.8 |
+| Strategy | work conservation | throughput | fairness std |
+|---|---|---|---|
+| `baseline` | **1.0000** | **0.606000** | 8.28 |
+| `consistent_hash` | **1.0000** | **0.606000** | 6.66 |
+| `leader_election` | **1.0000** | **0.606000** | 5.99 |
+| `random_backoff` | 0.9100 | 0.603667 | 6.18 |
+| `token_ring` | 0.1320 | 0.413667 | 3.27 |
+
+Identical to the last bit, while fairness varies. Work-conserving strategies
+dispatch on exactly the same steps; all they vary is *which* server gets the
+job.
+
+With failures enabled a spread of ~1% appears, and that is a second-order
+effect of the same thing: a failure discards the in-flight job's progress, and
+which job is in flight is precisely what the strategies disagree about. Across
+utilisation 0.71 to 1.90, throughput spread among work-conserving strategies
+stays between 0.000 and 0.009 while the fairness spread runs from 2.4 to 21.7.
+
+`results/EVAL_mechanism.md`
+
+### 2. Who captures the available value
+
+Every policy faces the same decision every 20 steps, from the same
+CRN-controlled workload, differing only in how it chooses:
+
+- `static:*` — never switches. Five of these; the best is the bar.
+- `random` — uniform choice. The "better than noise?" control.
+- `rule` — the 12-line rule table. The "expensive if/else?" control.
+- `oracle:*` — forks the live state once per candidate strategy, runs each
+  forward 40 steps under the identical arrival and failure sequence, takes the
+  best. It sees the future. It is not deployable and is not meant to be; it
+  exists to size the prize.
+- `agent` — the model.
+
+10 seeds x 300 steps, decisions every 20 steps:
+
+| | best fixed | lookahead oracle | headroom |
+|---|---|---|---|
+| throughput | 0.6283 | 0.6283 | **0.0%** |
+| avg queue length | 2.600 | 2.491 | 4.2% — negligible |
+| fairness std | 1.599 | 1.369 | **14.4%**, CI [−0.354, −0.107] |
+
+Judged on both axes at once, where both are lower-is-better:
+
+| Policy | avg queue | fairness std | fixed strategies it beats on both | beaten by |
+|---|---|---|---|---|
+| `oracle:balanced` | 2.50 | 1.78 | **4 of 5** | none |
+| `oracle:fairness` | 24.10 | 1.37 | `token_ring` | none |
+| `oracle:queue` | 2.49 | 4.33 | none | none |
+| `rule` | 4.60 | 3.85 | none | 3 of 5 |
+| `agent` (`gpt-oss:120b`) | 5.59 | 3.67 | none | 3 of 5 |
+| `random` | 7.87 | 2.63 | none | `consistent_hash` |
+
+The fixed-strategy frontier is just `consistent_hash` (2.60 / 2.61) and
+`token_ring` (31.81 / 1.60). `oracle:balanced` beats `consistent_hash` on
+*both* axes — **switching has genuine value, and it is worth 14.4%**.
+
+Neither `rule` nor `agent` captures it. Both are dominated by the same three
+fixed strategies, and they do not dominate each other: the agent is better on
+fairness (3.67 vs 3.85), worse on backlog (5.59 vs 4.60). The agent held its
+strategy on 89 of 150 decisions and switched on 61, at 8.4s and ~1,600 tokens
+per decision against the rule table's microseconds.
+
+150/150 agent calls returned a schema-valid decision, with zero transport or
+parse failures.
+
+> One number not to over-read: agreement with the lookahead was 14.7% for the
+> agent and 22.0% for `random`. The reference there is the *fairness* oracle,
+> and the agent mostly holds `baseline` — so this says "it is not chasing
+> fairness", not "it decides worse than chance". The Pareto row is the honest
+> summary.
+
+`results/EVAL_oracle.md`
+
+### 3. What function the model implements
+
+Hold every input fixed but one, sweep that one, and watch where the answer
+changes. That is the decision boundary the model implements — the if/else it
+*is*, whether or not it was written as one. Asking the identical state several
+times measures how much of the answer is judgement and how much is sampling
+noise.
+
+`gpt-oss:120b` via Ollama, 31 states x 5 repeats = 155 calls, temperature 0.7:
+
+| | |
+|---|---|
+| Schema-valid responses | **155/155 (100%)** |
+| Self-consistency on identical input | **85.2%** — 17/31 states answered identically all 5 times |
+| Agreement with the 12-line rule table | **61.3%** |
+| Latency per decision | **8.4s median, 14.0s p95** |
+| Tokens per decision | ~1,251 in / ~354 out |
+
+**Which inputs it actually uses:**
+
+| Input | answer moves? |
+|---|---|
+| `queue_len` (0 → 80) | **no — `baseline` at every point** |
+| `queue_rate` (−3 → +6) | yes — switches to `random_backoff` at ≥ +1 |
+| `num_failed` (0 → 5) | yes — switches to `consistent_hash` at ≥ 3 |
+| `fairness_std` (0 → 14) | yes — switches to `token_ring` at ≥ 6 |
+| current `strategy` | yes — holds whatever is running, in all 5 cases |
+
+The `queue_len` result is the interesting one, and it is not inattention. At
+`queue_len=80` the model names the backlog and reasons past it:
+
+> "The queue is stable (queue_rate = 0) with 80 jobs waiting... throughput is
+> already matching the incoming rate... Keeping baseline preserves the current
+> throughput."
+
+It treats queue **level** as informational and queue **rate** as actionable.
+That happens to be right, and the mechanism measurement is what shows it:
+backlog is set by capacity against offered load, so switching cannot drain it.
+The rule table does the naive thing instead — `queue_len > 30 → random_backoff`
+— and that is a plausible reason it ends up Pareto-dominated by three fixed
+strategies.
+
+Two independent measurements agreeing is the strongest thing in this project.
+
+Against the deterministic `mock` provider the same harness reports 100%
+consistency and 100% rule agreement, and recovers the rule table's exact
+thresholds from black-box sweeps alone — so the 85.2% above is the model's
+variance, not the harness's.
+
+`results/EVAL_probe.md`
+
+### 4. Which component is actually deciding?
+
+The probe says *what* the model does; it does not say *why* it underperforms,
+and "the model is bad at this" is a shrug rather than a finding. Each ablation
+removes one component and measures what changes, over 8 fixed states — two of
+which deliberately pit fairness against throughput.
+
+**Inputs — drop one metric from the state entirely:**
+
+| Removed | decisions changed | reading |
+|---|---|---|
+| `queue_len` | **0 of 8** | never used it — confirms the probe |
+| `avg_wait` | **0 of 8** | never used it |
+| `queue_rate` | 2 of 8 | load in use |
+| `num_failed` | 2 of 8 | in use |
+| `fairness_std` | 2 of 8 | in use |
+
+**Two of five metrics are dead weight.** The state schema can lose 40% of its
+payload with no behavioural change — a real token saving, and independent
+confirmation that the `queue_len` result was deliberate ordering rather than
+inattention.
+
+**Prompt — how much is the model, how much is the brief:**
+
+| Variant | size | agrees with `full` |
+|---|---|---|
+| `full` (shipped) | 5,093 chars | — |
+| `no_ceiling` (token_ring's throughput ceiling removed) | 4,725 | 75% |
+| `minimal` (strategy names + output contract only) | 517 | **37.5%** |
+
+A 10x shorter prompt changes **62.5% of decisions**, so the prompt is carrying
+most of the decision-making. Removing just the token_ring ceiling hint flips
+`unfair_calm` — meaning part of the fairness → `token_ring` boundary the probe
+found was the hint being recited, not fairness being weighed.
+
+**Temperature — is the variance fixable at the call site?**
+
+| Temperature | self-consistency | agrees with 0.7 |
+|---|---|---|
+| 0.0 | **90.0%** | 62.5% |
+| 0.7 | **90.0%** | — |
+| 1.0 | 82.5% | 87.5% |
+
+**Temperature 0 buys no determinism** — identical consistency to 0.7, on
+identical inputs. The variance does not come from sampling temperature, so it
+cannot be removed by setting `temperature=0`; majority-vote sampling over
+several calls is the mitigation that remains.
+
+`results/EVAL_ablation_inputs.md`, `EVAL_ablation_prompt.md`,
+`EVAL_ablation_temperature.md`
+
+---
+
+## What I would say about this in an interview
+
+The defensible claim is not "an LLM made scheduling faster". It is:
+
+> I built a scheduling simulator with an LLM choosing dispatch strategy at
+> runtime. To find out whether that helped, I built a lookahead oracle — fork
+> the live state with the RNG streams intact, roll every candidate strategy
+> forward against an identical future. It proved dynamic switching genuinely
+> beats every fixed strategy on backlog *and* fairness at once, worth 14.4%
+> with the confidence interval excluding zero. It also proved throughput
+> headroom was exactly zero — three of the five strategies are perfectly
+> work-conserving and produce identical throughput — so I stopped optimising
+> there. Then 641 live model calls showed 40% of my input schema was never
+> read, and that temperature 0 buys no determinism. The first prompt does not
+> capture the headroom yet, but I know how much there is and which inputs
+> matter.
+
+The parts I would expect to be pushed on, and would concede:
+
+- The lookahead oracle is **greedy over one horizon, not globally optimal**, so
+  it is a strong reference and not a proven ceiling. At one load it scores
+  *worse* than the best fixed strategy on queue length, which is what greedy
+  myopia looks like.
+- Which policy the oracle prefers **depends on the objective it maximises**,
+  and the fairness weight in the balanced objective is a judgement call, not a
+  derived constant. That is why results are reported under three objectives;
+  where they disagree, the choice of objective is doing the work, not the
+  policy.
+- It is a **simulation**. No real workers, no network, no real compute.
+- **n=10 seeds** for the oracle results, and **one model**. Enough for the
+  paired intervals reported and to falsify my own earlier claim; not enough to
+  generalise. Scaling seeds and comparing model sizes is the obvious next step,
+  and the provider layer already supports it.
+- The ablations show the **prompt is carrying most of the decision-making**, so
+  the agent result is a verdict on this prompt with this model — not on the
+  idea. The next version would be built around the three inputs that measurably
+  matter.
 
 ---
 
 ## Architecture
 
-```mermaid
-graph TB
-    subgraph Frontend["Frontend (React + TypeScript)"]
-        UI[Dashboard UI]
-        WS_CLIENT[WebSocket Client]
-        GEMINI_SVC[geminiService.ts]
-        CHARTS[Recharts Visualizations]
-    end
-
-    subgraph Backend["Backend (FastAPI + Python)"]
-        API[API Router]
-        ENGINE[SimEngine\n8-node simulation]
-        COMP[ComparisonEngine\nCRN-controlled]
-        WS_SERVER[WebSocket Server]
-        DB[(SQLite\nRun configs\nDecision log)]
-    end
-
-    subgraph AI["AI Layer (Gemini 2.5 Flash)"]
-        GEMINI[Gemini API\ngenerateContent]
-        SCHEMA[Structured Output\nJSON Schema]
-    end
-
-    UI -->|click strategy| API
-    API -->|start SimEngine| ENGINE
-    ENGINE -->|metrics every 0.5s| WS_SERVER
-    WS_SERVER -->|broadcast| WS_CLIENT
-    WS_CLIENT -->|metrics payload| GEMINI_SVC
-    GEMINI_SVC -->|throttled 15s| GEMINI
-    GEMINI -->|structured decision| SCHEMA
-    SCHEMA -->|switch_strategy action| API
-    API -->|hot-swap strategy| ENGINE
-    API -->|log decision| DB
-    ENGINE -->|run config| DB
-    UI -->|compare request| COMP
-    DB -->|seed + decisions| COMP
-    COMP -->|replay both arms| CHARTS
 ```
+React dashboard  ──WebSocket──►  FastAPI  ──►  SimEngine (8 servers, seeded)
+       │                            │
+       └────POST /agent/decide──────┘──►  agent_service ──► Ollama / Gemini / mock
+                                    │
+                                    └──►  SQLite (run configs, decision log)
+```
+
+The API key stays server-side; nothing model-related reaches the browser
+bundle.
+
+**Common Random Numbers.** Comparing two scheduling policies is only
+meaningful if they met the same workload. `SimEngine` splits its randomness
+into three independent streams derived from one seed — arrivals, failures, and
+strategy-internal draws. Because `random_backoff` is the only strategy that
+draws randomness, a single shared stream would let it shift every subsequent
+arrival and failure in its own arm, so the two arms would face different
+workloads. That is exactly the confound the comparison exists to remove. The
+split is asserted at runtime (`crn_verified`) and pinned by tests.
+
+**Forking.** `SimEngine.fork()` deep-copies the live state, RNG streams
+included, so N candidate strategies can be rolled forward from one state
+against an identical future. This is what makes the lookahead oracle possible,
+and `test_engine.py` pins the property it depends on.
+
+### The five strategies
+
+| Strategy | Primitive | Work-conserving |
+|---|---|---|
+| `baseline` | lowest-ID-first dispatch | yes |
+| `random_backoff` | randomised retry, CSMA/CD-style | mostly (~0.91) |
+| `consistent_hash` | hash ring with forward probing | yes |
+| `token_ring` | rotating token, mutual exclusion | **no (~0.13)** |
+| `leader_election` | elected coordinator dispatches | yes |
 
 ---
 
-## Scheduling Algorithms
-
-Five algorithms are implemented in `app/scheduler_engine.py`, each reflecting
-a real distributed systems primitive:
-
-```mermaid
-graph LR
-    subgraph Algorithms
-        B[baseline\nLowest-ID first\nO-1 per step]
-        RB[random_backoff\nContention avoidance\nRandomized retry]
-        CH[consistent_hash\nRing-based locality\nFailure resilient]
-        TR[token_ring\nMutual exclusion\nPerfect fairness]
-        LE[leader_election\nCentralized drain\nMeritocratic election]
-    end
-```
-
-### Throughput characteristics
-
-| Strategy | Max Throughput | Fairness | Failure Resilience | Best Under |
-|----------|---------------|----------|--------------------|------------|
-| baseline | High | Poor | Low | Light, stable load |
-| random_backoff | High | Medium | Medium | High contention |
-| consistent_hash | High | Medium | **High** | Server churn/failures |
-| token_ring | **~0.5 jobs/step** | **Perfect** | Medium | Light load, fairness-critical |
-| leader_election | High | Medium | Medium | Rapid queue growth |
-
-> **token_ring's structural ceiling:** the token rotates every 2 steps across
-> 8 servers, meaning only 1 server can claim a job per rotation regardless of
-> how many servers are free or how deep the queue is. At `arrival_prob=0.6`,
-> the system receives ~0.6 jobs/step — token_ring runs at a permanent deficit
-> of ~0.1 jobs/step under normal load, compounding to ~0.45 jobs/step deficit
-> during heavy windows. This is a mathematical property, not a tuning issue.
-
-### Strategy execution model
-
-```mermaid
-sequenceDiagram
-    participant Q as Job Queue
-    participant E as SimEngine.step()
-    participant S as Strategy
-    participant SV as Servers[0..7]
-
-    E->>E: _process_failures()
-    E->>E: calculate queue_rate (EMA)
-    E->>Q: maybe append new job (arrival_prob)
-    E->>S: execute current strategy
-    S->>SV: assign jobs to free servers
-    E->>SV: decrement work_remaining per busy server
-    E->>E: _check_deadlock()
-    E->>E: broadcast metrics via WebSocket
-```
-
----
-
-## AI Orchestration Layer
-
-### How Gemini makes decisions
-
-Every ~15 seconds, the frontend sends the current metrics snapshot to Gemini
-2.5 Flash with a system prompt that:
-
-1. Describes each strategy's tradeoffs **mathematically**, not as rules
-2. Explains the throughput/fairness tradeoff as competing objectives
-3. Requires explicit counterfactual reasoning in every response
-4. Enforces hysteresis — no switching unless held current strategy 20-30 steps
-
-**Critical design choice:** the prompt does NOT encode explicit thresholds
-like "if queue_len > 30 → switch to random_backoff." That would make Gemini
-an expensive Python if/else statement. Instead it receives the mathematical
-reality (e.g. token_ring's 0.5 jobs/step ceiling vs current arrival rate)
-and must reason about whether current conditions make that tradeoff acceptable.
-
-### Decision flow
-
-```mermaid
-flowchart TD
-    A[Metrics snapshot arrives] --> B{15s throttle\nelapsed?}
-    B -->|No| C[Skip — too soon]
-    B -->|Yes| D[Call Gemini API\nwith metrics + system prompt]
-    D --> E{API response}
-    E -->|429 Rate Limited| F[Parse retryDelay\nfrom error body]
-    F --> G[Sleep retryDelay seconds]
-    G --> H[Retry once]
-    H -->|Success| I[Parse structured JSON decision]
-    H -->|429 again| J[Return fallback\nDecision making paused]
-    E -->|Success| I
-    I --> K{action field}
-    K -->|explain| L[Log to AgentLogs sidebar\nNo strategy change]
-    K -->|switch_strategy| M[POST /api/runs/switch-strategy\nHot-swap engine strategy]
-    M --> N[POST /api/runs/log-decision\nPersist to SQLite GeminiDecision table]
-    N --> O[Update AgentLogs sidebar]
-```
-
-### Actual decision log — run #43
-
-```
-Config: random_backoff start | arrival_prob=0.6 | seed=1 | 202 steps
-
-Load profile:
-  steps   1– 80: arrival_prob × 0.3/0.6 = 0.30  (light warmup)
-  steps  81–180: arrival_prob × 0.95/0.6 = 0.95 (heavy spike)
-  steps 181–202: arrival_prob × 0.85/0.6 = 0.85 (second wave)
-
-Gemini decisions:
-  step   1 → baseline        light load, random_backoff overhead unjustified
-  step  21 → consistent_hash load picking up, need distribution + resilience
-  step  31 → token_ring      queue stable, fairness degrading, light load safe
-  step  51 → random_backoff  heavy window approaching, token_ring deficit risk
-  step  63 → consistent_hash sustained load, deterministic locality over random
-  step  73 → token_ring      brief fairness spike, queue still manageable
-  step  93 → leader_election HEAVY LOAD HIT — queue building, centralize drain
-  step 103 → leader_election held — queue still under pressure, correct call
-  step 113 → consistent_hash queue stabilizing, reduce leader bottleneck risk
-  step 123 → leader_election queue spiking again mid-heavy window
-  step 143 → consistent_hash queue under control, reduce centralization overhead
-  step 163 → leader_election late heavy window, queue pressure returning
-  step 173 → random_backoff  load tapering, distributed competition efficient
-  step 185 → random_backoff  held — second heavy wave, contention manageable
-```
-
-**Three distinct behavioral phases are clearly visible:**
-- **Light load (1–80):** simplify — move off random_backoff to baseline/consistent_hash
-- **Heavy load (81–180):** centralize — oscillate between leader_election and consistent_hash, never touch token_ring
-- **Tapering (181–202):** distribute — back to random_backoff as pressure eases
-
----
-
-## Comparison Engine
-
-This is the most technically rigorous part of the project. The naive approach
-— run AI-guided once, run static once, compare numbers — is invalid because
-different random seeds produce different job arrival timings and failure events,
-making any observed difference attributable to randomness rather than strategy.
-
-### Common Random Numbers (CRN) methodology
-
-```mermaid
-flowchart LR
-    subgraph LiveRun["Live Run (with Gemini)"]
-        LR_CONFIG[seed=1\narrival_prob=0.6\nsim_steps=202]
-        LR_ENGINE[SimEngine\nrandom_backoff start]
-        LR_GEMINI[Gemini API\n14 decisions logged]
-        LR_DB[(SQLite\nRun config\nDecision log)]
-    end
-
-    subgraph Comparison["Comparison Request"]
-        REQ[POST /runs/compare\nreplay_run_id=43]
-        DB_LOOKUP[Lookup run #43\nfrom DB\nseed=1, steps=202\narrival_prob=0.6]
-    end
-
-    subgraph Arms["Two Arms — Same Seed"]
-        subgraph StaticArm["Static Arm"]
-            SA_RNG[random.Random seed=1\nISOLATED instance]
-            SA_ENGINE[ComparisonEngine\nfixed random_backoff\nall 202 steps]
-        end
-        subgraph AIArm["AI Arm"]
-            AA_RNG[random.Random seed=1\nISOLATED instance]
-            AA_ENGINE[ComparisonEngine\nreplays logged decisions\nat exact step numbers]
-        end
-    end
-
-    LR_CONFIG --> LR_ENGINE
-    LR_GEMINI --> LR_DB
-    LR_ENGINE --> LR_DB
-    REQ --> DB_LOOKUP
-    DB_LOOKUP --> SA_RNG
-    DB_LOOKUP --> AA_RNG
-    SA_RNG --> SA_ENGINE
-    AA_RNG --> AA_ENGINE
-```
-
-### Why isolated RNG instances matter
-
-Both engines are seeded identically (`random.Random(seed=1)`), but they are
-**separate Python objects** — not reseeds of the shared global `random` module.
-
-If both engines shared the global `random` module, any strategy that calls
-`random.shuffle()` (only `random_backoff` does) would consume extra draws from
-the shared stream, desyncing the arrival and failure sequences for every
-subsequent step. This would mean the two arms experience *different job arrival
-timings and failure events* from the very first shuffle call — invalidating
-the "identical load" guarantee.
-
-With isolated instances: `engine_static.rng.shuffle()` has zero effect on
-`engine_gemini.rng.random()`. Both engines see identical arrival events and
-server failures at every step, for all 202 steps, regardless of which strategy
-either is running.
-
-### Replay semantics
-
-```mermaid
-flowchart TD
-    A[Step N in AI arm] --> B{Is step N in\ndecision_map?}
-    B -->|Yes| C[Apply logged strategy\nGemini decided this at step N]
-    B -->|No| D[Find last logged decision\nbefore step N]
-    D --> E[Hold that strategy\nuntil next logged switch]
-    C --> F[Continue simulation step]
-    E --> F
-```
-
-This "hold last known strategy" semantic is correct: Gemini's decisions apply
-from the moment of the switch and persist until the next switch event. The
-replay engine faithfully reproduces this behavior.
-
----
-
-## System Flow
-
-### Complete request lifecycle — starting a simulation
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant React as React Dashboard
-    participant FastAPI as FastAPI Router
-    participant DB as SQLite
-    participant Engine as SimEngine
-    participant WS as WebSocket Manager
-    participant Gemini as Gemini 2.5 Flash
-
-    User->>React: Click "random_backoff"
-    React->>FastAPI: POST /api/runs/start\n{strategy, seed, arrival_prob, sim_steps}
-    FastAPI->>DB: INSERT Run(strategy, seed, arrival_prob, sim_steps)
-    DB-->>FastAPI: run_id = 43
-    FastAPI->>Engine: SimEngine(run_id=43, strategy="random_backoff", seed=1)
-    FastAPI->>Engine: asyncio.create_task(engine.run_loop)
-    FastAPI-->>React: {run_id: 43}
-    React->>FastAPI: DELETE /api/runs/43/decisions
-    loop Every 0.5 seconds
-        Engine->>Engine: step() — arrivals, strategy, work, failures
-        Engine->>WS: broadcast metrics payload
-        WS->>React: {run_id, payload: {time, queue_len, servers, ...}}
-        React->>React: Update charts, server grid
-    end
-    loop Every 15 seconds
-        React->>Gemini: generateContent(metrics + system_prompt)
-        Gemini-->>React: {action, strategy, message}
-        alt action == switch_strategy
-            React->>FastAPI: POST /api/runs/switch-strategy\n{run_id, strategy}
-            FastAPI->>Engine: engine.strategy = new_strategy (hot-swap)
-            React->>FastAPI: POST /api/runs/log-decision\n{run_id, step, strategy}
-            FastAPI->>DB: INSERT GeminiDecision(run_id, step, strategy)
-        end
-        React->>React: Append to AgentLogs sidebar
-    end
-    User->>React: Click "Stop Run"
-    React->>FastAPI: POST /api/runs/stop {run_id: 43}
-    FastAPI->>Engine: engine.stop()
-    FastAPI->>DB: UPDATE Run SET total_steps, total_completed, end_time
-```
-
-### Comparison request lifecycle
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant React as React Dashboard
-    participant FastAPI as FastAPI Router
-    participant DB as SQLite
-    participant Static as ComparisonEngine\n(static arm)
-    participant AI as ComparisonEngine\n(AI replay arm)
-
-    User->>React: Click "Compare vs random_backoff"
-    React->>FastAPI: POST /api/runs/compare\n{base_strategy, replay_run_id: 43}
-    FastAPI->>DB: SELECT seed, arrival_prob, total_steps FROM run WHERE id=43
-    DB-->>FastAPI: seed=1, arrival_prob=0.6, steps=202
-    FastAPI->>DB: SELECT step, strategy FROM geminidecision WHERE run_id=43
-    DB-->>FastAPI: 14 decision records
-    FastAPI->>Static: ComparisonEngine(seed=1, strategy="random_backoff")
-    FastAPI->>AI: ComparisonEngine(seed=1, strategy="random_backoff")
-    FastAPI->>Static: run_steps(202) — fixed strategy
-    FastAPI->>AI: run_steps(202, replay_selector) — AI decisions replayed
-    FastAPI-->>React: comparison metrics + meta + diagnostics
-    React->>React: Render 3 charts + summary cards + replay banner
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Backend runtime | Python 3.11 + asyncio | Native async for WebSocket + concurrent engines |
-| API framework | FastAPI | Async-native, automatic OpenAPI, Pydantic validation |
-| ORM | SQLModel | SQLAlchemy async + Pydantic models in one |
-| Database | SQLite (aiosqlite) | Zero-config persistence for run configs + decision log |
-| WebSocket | FastAPI WebSocket | Native support, no extra dependencies |
-| Frontend | React 18 + TypeScript | Type-safe component model |
-| Charts | Recharts | Composable, real-time friendly |
-| AI | Gemini 2.5 Flash | Structured output (JSON schema enforcement), fast inference |
-| Simulation | NumPy + Python random | Reproducible seeded randomness, per-engine isolation |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- Gemini API key ([aistudio.google.com](https://aistudio.google.com))
+## Running it
 
 ### Backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
-
-# Create .env
-echo "DATABASE_URL=sqlite+aiosqlite:///./simulation.db" > .env
-
+cp .env.example .env        # then fill in a key if you want the agent
 uvicorn app.main:app --reload
-# Running on http://127.0.0.1:8000
 ```
 
 ### Frontend
@@ -449,156 +336,95 @@ uvicorn app.main:app --reload
 ```bash
 cd frontend
 npm install
-
-# Create .env.local
-echo "GEMINI_API_KEY=your_key_here" > .env.local
-
 npm run dev
-# Running on http://localhost:3000
 ```
 
-### Running a comparison
-
-1. Click any strategy button to start a simulation
-2. Watch AgentLogs for `SWITCH_STRATEGY` entries — wait for at least 3-5
-3. Click **Stop Run**
-4. Click any **Compare vs X** button
-5. Verify the green banner: `✓ Replaying N real Gemini decisions from run #X`
-
----
-
-## Project Structure
-
-```
-schedulerAI/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app, CORS, lifespan
-│   │   ├── api.py               # All routes + ComparisonEngine
-│   │   ├── scheduler_engine.py  # SimEngine + 5 strategy implementations
-│   │   ├── models.py            # Run, JobLog, GeminiDecision (SQLModel)
-│   │   ├── database.py          # Async engine + session factory
-│   │   └── config.py            # Settings (DATABASE_URL, NUM_SERVERS)
-│   └── requirements.txt
-│
-└── frontend/
-    └── src/
-        ├── App.tsx              # Main orchestration, WebSocket, agent loop
-        ├── constants.ts         # API URLs, Gemini model, SYSTEM_PROMPT
-        ├── types.ts             # TypeScript interfaces
-        ├── services/
-        │   ├── simulator.ts     # API calls (start, stop, compare)
-        │   └── geminiService.ts # Gemini integration, retry logic
-        └── components/
-            ├── MetricsCharts.tsx
-            ├── ServerGrid.tsx
-            ├── AgentLogs.tsx
-            └── ComparisonCharts.tsx
-```
-
----
-
-## Honest Limitations
-
-A senior engineer will ask about these. Here they are, upfront:
-
-**1. Simulation, not production**
-This is a discrete-event simulation, not a real job queue. There are no actual
-worker processes, no network I/O, no real compute. The scheduling algorithms
-are faithful implementations of the real primitives, but the environment is
-controlled. The appropriate analogy is an OS scheduling simulator — used for
-research before kernel implementation, not a replacement for it.
-
-**2. Single run per configuration**
-The headline results (88% queue reduction, 41% throughput gain) come from
-one run (run #43) with one seed. This is a proof-of-concept result, not a
-statistically significant finding. A rigorous evaluation would require 30+
-runs per configuration with t-tests for significance. The CRN methodology
-makes the single run more meaningful than a naive comparison, but it does
-not substitute for replication.
-
-**3. AI loses to some static strategies**
-Against well-matched static strategies (baseline under light load,
-consistent_hash under moderate load), the AI arm shows marginal or no
-throughput improvement. The significant gains appear specifically when the
-static strategy is poorly matched to the load profile — which is the
-realistic use case for dynamic switching, but should be stated explicitly.
-
-**4. Rate limiting constrains live decision frequency**
-Gemini free tier allows 5 requests/minute. At 15-second throttling plus
-retry overhead, the agent can hit quota limits during long runs, causing
-"Decision making paused" gaps. A production deployment would use a paid
-tier or move inference server-side with a local model.
-
-**5. API key in browser**
-Currently `GEMINI_API_KEY` is read from `import.meta.env` and bundled into
-client-side JavaScript. For production deployment, Gemini calls should be
-proxied through the FastAPI backend so the key never leaves the server.
-
----
-
-## What I Would Do Next
-
-In rough priority order:
-
-**1. Move Gemini to the backend**
-Add a `/api/agent/decide` endpoint. `geminiService.ts` POSTs metrics there;
-FastAPI calls Gemini server-side. Fixes the API key exposure issue and enables
-headless batch runs without the UI open.
-
-**2. Multi-seed statistical validation**
-Automate 30 runs per configuration with seeds 1–30. Compute mean ± std for
-queue length, throughput, and fairness. Run t-tests. Replace "one run" results
-with "n=30, p < 0.05" results in this README.
-
-**3. Ablation: LLM vs rule-based switcher**
-Compare Gemini decisions against the deterministic `gemini_strategy_selector`
-Python heuristic under identical CRN conditions. This directly answers "does
-the LLM add value over a simple rule table?" — the hardest question this
-project faces.
-
-**4. Real job queue backend**
-Replace the simulation with Kafka or RabbitMQ as the job source and real
-worker processes as servers. The scheduling logic is identical; the environment
-becomes production-grade.
-
-**5. Additional load profiles**
-Test bursty (random spikes), ramp-up (linearly increasing), and oscillating
-load patterns. Report which profiles benefit most from dynamic switching.
-
----
-
-## Results Reproducibility
-
-To reproduce the headline result (run #43):
+### Tests
 
 ```bash
-# Start backend
-uvicorn app.main:app
-
-# Via API directly
-curl -X POST http://localhost:8000/api/runs/start \
-  -H "Content-Type: application/json" \
-  -d '{"strategy": "random_backoff", "arrival_prob": 0.6, "seed": 1, "sim_steps": 202}'
-
-# After run completes, compare vs random_backoff
-curl -X POST http://localhost:8000/api/runs/compare \
-  -H "Content-Type: application/json" \
-  -d '{"base_strategy": "random_backoff", "replay_run_id": <run_id>}'
+cd backend && python test_engine.py     # 30 tests, no dependencies
 ```
 
-Note: Gemini decisions in the replay are from the original live run (logged to
-SQLite). Re-running the simulation with the same seed will reproduce identical
-job arrivals and failures, but will produce different Gemini decisions since
-those depend on the live API response at the time of the original run.
+They pin the properties the results depend on: CRN, fork fidelity, failure
+semantics, replay timing, and the work-conservation finding itself. If
+`test_work_conserving_strategies_share_one_throughput_absent_failures` ever
+fails, the headline result needs revisiting.
+
+### Running the evaluation
+
+```bash
+cd backend
+
+# No API key needed:
+python eval_mechanism.py --seeds 5 --steps 600
+python eval_oracle.py --policies static,random,rule,oracle --seeds 10
+
+# Validate the harnesses against the deterministic mock first — against `mock`
+# they must report 100% consistency and zero divergence between conditions,
+# or the measurement code is wrong rather than the model:
+AGENT_PROVIDER=mock python eval_probe.py --repeats 3
+AGENT_PROVIDER=mock python eval_ablation.py --mode prompt --repeats 2
+
+# Then with a real model (set AGENT_PROVIDER and a key in .env):
+python eval_probe.py --repeats 5 --concurrency 4
+python eval_oracle.py --policies all --seeds 10
+python eval_ablation.py --mode inputs --repeats 3
+python eval_ablation.py --mode prompt --repeats 3
+python eval_ablation.py --mode temperature --repeats 5
+```
+
+`AGENT_PROVIDER` selects `ollama`, `gemini`, or `mock`. Ollama is the default
+because the harness makes hundreds of calls per sweep and Gemini's free tier
+has a per-day quota that one sweep exhausts. The decision contract is identical
+across providers, so which one produced a decision never changes how it is
+scored.
+
+---
+
+## Layout
+
+```
+backend/
+  app/
+    scheduler_engine.py   SimEngine, 5 strategies, CRN streams, fork()
+    agent_prompt.py       prompt + variants + response schema + validation
+    agent_service.py      ollama / gemini / mock behind one contract
+    api.py                routes, WebSocket, comparison pipeline
+    models.py             Run, JobLog, GeminiDecision
+    config.py, database.py, main.py
+  eval_mechanism.py       why throughput is closed
+  eval_oracle.py          policy ladder, headroom, Pareto, paired CIs
+  eval_probe.py           decision-boundary probe
+  eval_ablation.py        prompt / input / temperature ablations
+  test_engine.py          30 invariant tests
+frontend/                 App.tsx, components/, services/  (flat, no src/)
+results/                  generated reports, regenerable from the scripts
+```
+
+---
+
+## Known limitations
+
+1. **Simulation, not production.** Discrete-event; no real workers or I/O.
+2. **n=10 seeds** for the oracle results, 5 for the mechanism results, and a
+   single model (`gpt-oss:120b`). Enough to bound the headroom, not to
+   generalise across models.
+3. **The oracle is greedy, not optimal** (see above).
+4. **Synthetic probe and ablation states have no history**, so the prompt's
+   hysteresis instruction has nothing to bind to; the `strategy` sweep is a
+   proxy for stickiness, not a test of hysteresis.
+5. **The prompt tells the model about `token_ring`'s throughput ceiling**, and
+   the `no_ceiling` ablation shows that hint is load-bearing — part of the
+   fairness → `token_ring` boundary is recitation rather than judgement.
+6. **The agent result is a verdict on one prompt**, not on the idea. The
+   ablations show the prompt carries most of the decision-making, and point at
+   what a second version should be built around.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
-
----
+MIT
 
 *Built by [Ashmeen Kaur](https://github.com/ashmeenkhaira) — B.E. Electronics
 and Computer Engineering, Thapar Institute of Engineering and Technology*
